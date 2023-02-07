@@ -47,7 +47,6 @@ fixes, new commits to the HW repo, etc., as bugs and issues are reported.
 
 <p>...and if you find a bug in our code, we`ll give you a candy bar (see
 [Section 3.3](#bugs))!
-
 -->
 <!--which you can find [here](bugs.html).</p>-->
 
@@ -513,7 +512,7 @@ entire SimpleDB process. The global catalog can be retrieved via the method
 
 ---
 * src/java/simpledb/common/Catalog.java
---- 
+---
 
 At this point, your code should pass the unit tests in `CatalogTest`.
 
@@ -654,7 +653,7 @@ file. You will then be able to fetch tuples from a file stored on disk.
 
 ---
 * src/java/simpledb/storage/HeapFile.java
---- 
+---
 
 To read a page from disk, you will first need to calculate the correct offset in
 the file. Hint: you will need random access to the file in order to read and

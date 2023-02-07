@@ -3,11 +3,12 @@ package simpledb.storage;
 import simpledb.common.Catalog;
 import simpledb.common.Database;
 import simpledb.common.DbException;
-import simpledb.common.Debug;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -24,6 +25,8 @@ public class HeapPage implements Page {
     final byte[] header;
     final Tuple[] tuples;
     final int numSlots;
+    final List<Integer> tupleList;
+
 
     byte[] oldData;
     private final Byte oldDataLock = (byte) 0;
@@ -49,6 +52,7 @@ public class HeapPage implements Page {
         this.pid = id;
         this.td = Database.getCatalog().getTupleDesc(id.getTableId());
         this.numSlots = getNumTuples();
+        this.tupleList = new ArrayList<>();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
@@ -65,32 +69,28 @@ public class HeapPage implements Page {
             e.printStackTrace();
         }
         dis.close();
-
         setBeforeImage();
     }
 
     /**
      * Retrieve the number of tuples on this page.
-     *
+     * tuples per page = floor((page size * 8) / (tuple size * 8 + 1))
      * @return the number of tuples on this page
      */
     private int getNumTuples() {
-        // TODO: some code goes here
-        return 0;
-
+        return (int) Math.floor((BufferPool.getPageSize() * 8.0 ) / (td.getSize() * 8 + 1));
     }
 
     /**
      * Computes the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
-     *
+     * header bytes = ceiling(tuples per page / 8)
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {
-
-        // TODO: some code goes here
-        return 0;
-
+        return (int) Math.ceil(getNumTuples() / 8.0);
     }
+
+
 
     /**
      * Return a view of this page before it was modified
@@ -121,8 +121,7 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-        // TODO: some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return pid;
     }
 
     /**
@@ -293,16 +292,24 @@ public class HeapPage implements Page {
      * Returns the number of unused (i.e., empty) slots on this page.
      */
     public int getNumUnusedSlots() {
-        // TODO: some code goes here
-        return 0;
+        int res = 0, index = -1;
+        for (int i = 0; i < getNumTuples(); i++) {
+            if(i % 8 == 0) index++;
+            if(getBit(header[index], i % 8) == 0)
+                res++;
+            else if (!tupleList.contains(i)){
+                tupleList.add(i);
+            }
+        }
+        return res;
     }
 
     /**
      * Returns true if associated slot on this page is filled.
      */
     public boolean isSlotUsed(int i) {
-        // TODO: some code goes here
-        return false;
+        int index = i / 8;
+        return getBit(header[index], i % 8) == 1;
     }
 
     /**
@@ -313,14 +320,62 @@ public class HeapPage implements Page {
         // not necessary for lab1
     }
 
+    private class TupIterator implements Iterator{
+
+        Iterator <Integer> realIterator;
+
+        public TupIterator(Iterator <Integer> realIterator){
+            this.realIterator = realIterator;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return realIterator.hasNext();
+        }
+
+        @Override
+        public Tuple next() {
+            return tuples[realIterator.next()];
+        }
+
+        @Override
+        public void remove() throws UnsupportedOperationException{
+            throw new UnsupportedOperationException();
+        }
+    }
+
     /**
      * @return an iterator over all tuples on this page (calling remove on this iterator throws an UnsupportedOperationException)
      *         (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        // TODO: some code goes here
-        return null;
+        getNumUnusedSlots(); // 更新tupleList
+        return new TupIterator(tupleList.iterator());
     }
+
+    /* Returns the Nth bit of X. */
+    private int getBit(byte x, int n) {
+        int mask = 1 << n;
+        return (x & mask) >> n;
+    }
+
+    /* Set the nth bit of the value of x to v. */
+    private byte setBit(byte x, int n, int v) {
+        int bit = getBit(x,n);
+        int mask = (bit ^ v) << n;
+        return (byte) (mask ^ x);
+    }
+
+    /* Flips the Nth bit in X. */
+    private byte flipBit(byte x, int n) {
+        /* YOUR CODE HERE */
+        int origin = getBit(x,n);
+        int flip = (~origin) & 1;
+        return setBit(x,n,flip);
+    }
+
+
+
 
 }
 

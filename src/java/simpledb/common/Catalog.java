@@ -9,7 +9,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The Catalog keeps track of all available tables in the database and their
@@ -22,12 +21,30 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    private static class CataLogEntry{
+        DbFile file;
+        String name;
+        String pkeyField;
+        public CataLogEntry(DbFile file, String name, String pkeyField){
+            this.file = file;
+            this.name = name;
+            this.pkeyField = pkeyField;
+        }
+    }
+
+    private HashMap<Integer,CataLogEntry> cataLogEntries;
+
+    private HashMap<String,Integer> nameIdMap;
+
+    private List<Integer> idList;
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
-        // TODO: some code goes here
+        this.cataLogEntries = new HashMap<>();
+        this.nameIdMap = new HashMap<>();
+        this.idList = new ArrayList<>();
     }
 
     /**
@@ -41,7 +58,11 @@ public class Catalog {
      * @param pkeyField the name of the primary key field
      */
     public void addTable(DbFile file, String name, String pkeyField) {
-        // TODO: some code goes here
+        CataLogEntry entry = new CataLogEntry(file, name, pkeyField);
+        int id = file.getId();
+        cataLogEntries.put(id, entry);
+        idList.add(id);
+        nameIdMap.put(name,id);
     }
 
     public void addTable(DbFile file, String name) {
@@ -66,8 +87,11 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public int getTableId(String name) throws NoSuchElementException {
-        // TODO: some code goes here
-        return 0;
+        Integer id = nameIdMap.get(name);
+        if(id == null){
+            throw new NoSuchElementException();
+        }
+        return id;
     }
 
     /**
@@ -78,8 +102,11 @@ public class Catalog {
      * @throws NoSuchElementException if the table doesn't exist
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
-        // TODO: some code goes here
-        return null;
+        CataLogEntry entry = cataLogEntries.get(tableid);
+        if(entry == null){
+            throw new NoSuchElementException();
+        }
+        return entry.file.getTupleDesc();
     }
 
     /**
@@ -90,30 +117,40 @@ public class Catalog {
      *                function passed to addTable
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
-        // TODO: some code goes here
-        return null;
+        CataLogEntry entry = cataLogEntries.get(tableid);
+        if(entry == null){
+            throw new NoSuchElementException();
+        }
+        return entry.file;
     }
 
     public String getPrimaryKey(int tableid) {
-        // TODO: some code goes here
-        return null;
+        CataLogEntry entry = cataLogEntries.get(tableid);
+        if(entry == null){
+            throw new NoSuchElementException();
+        }
+        return entry.pkeyField;
     }
 
     public Iterator<Integer> tableIdIterator() {
-        // TODO: some code goes here
-        return null;
+        return idList.iterator();
     }
 
     public String getTableName(int id) {
-        // TODO: some code goes here
-        return null;
+        CataLogEntry entry = cataLogEntries.get(id);
+        if(entry == null){
+            throw new NoSuchElementException();
+        }
+        return entry.name;
     }
 
     /**
      * Delete all tables from the catalog
      */
     public void clear() {
-        // TODO: some code goes here
+        cataLogEntries.clear();
+        idList.clear();
+        nameIdMap.clear();
     }
 
     /**

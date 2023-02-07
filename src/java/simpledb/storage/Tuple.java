@@ -1,8 +1,11 @@
 package simpledb.storage;
 
+import simpledb.common.Type;
+
 import java.io.Serializable;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Tuple maintains information about the contents of a tuple. Tuples have a
@@ -13,6 +16,12 @@ public class Tuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private List<Field> fields;
+
+    private TupleDesc tupleDesc;
+
+    private RecordId recordId;
+
     /**
      * Create a new tuple with the specified schema (type).
      *
@@ -20,15 +29,27 @@ public class Tuple implements Serializable {
      *           instance with at least one field.
      */
     public Tuple(TupleDesc td) {
-        // TODO: some code goes here
+        this.fields = new ArrayList<>();
+        if(td == null || td.numFields() < 1){
+            return;
+        }
+        this.tupleDesc = td;
+        int len = td.numFields();
+        for (int i = 0; i < len; i++) {
+            Field newField;
+            if(td.getFieldType(i) == Type.INT_TYPE)
+                newField = new IntField(0);
+            else
+                newField = new StringField("",0);
+            fields.add(newField);
+        }
     }
 
     /**
      * @return The TupleDesc representing the schema of this tuple.
      */
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return tupleDesc;
     }
 
     /**
@@ -36,8 +57,7 @@ public class Tuple implements Serializable {
      *         be null.
      */
     public RecordId getRecordId() {
-        // TODO: some code goes here
-        return null;
+        return recordId;
     }
 
     /**
@@ -46,7 +66,7 @@ public class Tuple implements Serializable {
      * @param rid the new RecordId for this tuple.
      */
     public void setRecordId(RecordId rid) {
-        // TODO: some code goes here
+        this.recordId = rid;
     }
 
     /**
@@ -56,7 +76,8 @@ public class Tuple implements Serializable {
      * @param f new value for the field.
      */
     public void setField(int i, Field f) {
-        // TODO: some code goes here
+        if(fields == null || i >= fields.size() || i < 0 ) return;
+        fields.set(i,f);
     }
 
     /**
@@ -64,8 +85,9 @@ public class Tuple implements Serializable {
      * @return the value of the ith field, or null if it has not been set.
      */
     public Field getField(int i) {
-        // TODO: some code goes here
-        return null;
+        if(fields == null || i >= fields.size() || i < 0 ) return null;
+        Field field = fields.get(i);
+        return field; // ??? 这不是value啊
     }
 
     /**
@@ -77,22 +99,34 @@ public class Tuple implements Serializable {
      * where \t is any whitespace (except a newline)
      */
     public String toString() {
-        // TODO: some code goes here
-        throw new UnsupportedOperationException("Implement this");
+        StringBuilder res = new StringBuilder();
+        for (Field field:fields) {
+            String value;
+            if(field instanceof  IntField)
+                value = String.valueOf(((IntField) field).getValue());
+            else
+                value = ((StringField) field).getValue();
+            res.append(value).append('\t');
+        }
+        // 去除最后一个 \t
+        return res.substring(0, res.length() - 1);
     }
 
     /**
      * @return An iterator which iterates over all the fields of this tuple
      */
     public Iterator<Field> fields() {
-        // TODO: some code goes here
-        return null;
+        if(fields == null) return null;
+        return fields.iterator();
     }
 
     /**
      * reset the TupleDesc of this tuple (only affecting the TupleDesc)
      */
     public void resetTupleDesc(TupleDesc td) {
-        // TODO: some code goes here
+        Tuple newTuple = new Tuple(td);
+        this.fields = newTuple.fields;
+        this.tupleDesc = newTuple.tupleDesc;
+        // recordId 不变
     }
 }

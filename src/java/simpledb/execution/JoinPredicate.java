@@ -1,6 +1,5 @@
 package simpledb.execution;
 
-import simpledb.storage.Field;
 import simpledb.storage.Tuple;
 
 import java.io.Serializable;

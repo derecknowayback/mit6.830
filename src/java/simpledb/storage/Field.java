@@ -36,6 +36,7 @@ public interface Field extends Serializable {
      */
     Type getType();
 
+
     /**
      * Hash code.
      * Different Field objects representing the same value should probably

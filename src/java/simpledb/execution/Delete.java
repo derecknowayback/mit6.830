@@ -2,15 +2,11 @@ package simpledb.execution;
 
 import simpledb.common.Database;
 import simpledb.common.DbException;
-import simpledb.common.Type;
 import simpledb.storage.BufferPool;
-import simpledb.storage.IntField;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
-
-import java.io.IOException;
 
 /**
  * The delete operator. Delete reads tuples from its child operator and removes

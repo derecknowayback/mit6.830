@@ -40,14 +40,14 @@ public class SystemTestUtil {
                 columnSpecification, tuples);
         return Utility.openHeapFile(columns, temp);
     }
-    
+
     public static HeapFile createRandomHeapFile(
             int columns, int rows, Map<Integer, Integer> columnSpecification,
             List<List<Integer>> tuples, String colPrefix)
             throws IOException {
         return createRandomHeapFile(columns, rows, MAX_RAND_VALUE, columnSpecification, tuples, colPrefix);
     }
-    
+
     public static HeapFile createRandomHeapFile(
             int columns, int rows, int maxValue, Map<Integer, Integer> columnSpecification,
             List<List<Integer>> tuples, String colPrefix)
@@ -170,7 +170,7 @@ public class SystemTestUtil {
 
         return memAfter;
     }
-	
+
 	/**
 	 * Generates a unique string each time it is called.
 	 * @return a new unique UUID as a string, using java.util.UUID
@@ -178,7 +178,7 @@ public class SystemTestUtil {
 	public static String getUUID() {
 		return UUID.randomUUID().toString();
 	}
-	
+
 	private static double[] getDiff(double[] sequence) {
 		double[] ret = new double[sequence.length - 1];
 		for (int i = 0; i < sequence.length - 1; ++i)
@@ -197,7 +197,7 @@ public class SystemTestUtil {
 		ret[1] = (Double)ret[1]/2.0;
 		return ret;
 	}
-	
+
 	/**
 	 * Checks if the sequence represents an arithmetic sequence (approximately)
 	 * ret[0] is true if the sequence is linear
@@ -205,10 +205,10 @@ public class SystemTestUtil {
 	 * @param sequence
 	 * @return ret[0] = true if sequence is linear, ret[1] = the common difference
 	 */
-	public static Object[] checkLinear(double[] sequence) {				
+	public static Object[] checkLinear(double[] sequence) {
 		return checkConstant(getDiff(sequence));
 	}
-	
+
 	/**
 	 * Checks if the sequence represents approximately a fixed sequence (c,c,c,c,..)
 	 * ret[0] is true if the sequence is linear

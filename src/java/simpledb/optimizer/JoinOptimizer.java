@@ -3,7 +3,6 @@ package simpledb.optimizer;
 import simpledb.ParsingException;
 import simpledb.common.Database;
 import simpledb.execution.*;
-import simpledb.storage.TupleDesc;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;

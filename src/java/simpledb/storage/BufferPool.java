@@ -1,16 +1,17 @@
 package simpledb.storage;
 
+import simpledb.common.Catalog;
 import simpledb.common.Database;
 import simpledb.common.DbException;
-import simpledb.common.DeadlockException;
 import simpledb.common.Permissions;
+import simpledb.execution.SeqScan;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -38,13 +39,22 @@ public class BufferPool {
      */
     public static final int DEFAULT_PAGES = 50;
 
+    private final int numPages;
+
+    private int requestForPage;
+
+    private HashMap<PageId,Page> pageMap;
+
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-        // TODO: some code goes here
+        this.numPages = numPages;
+        this.pageMap = new HashMap<>();
+        this.requestForPage = 0;
     }
 
     public static int getPageSize() {
@@ -78,8 +88,15 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        Page page = pageMap.get(pid);
+        if(page != null)  return page;
+        requestForPage++;
+        if(requestForPage > numPages){
+            throw new DbException("Lab1: Too much Request for Buffer Pool");
+        }
+        page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+        pageMap.put(page.getId(), page);
+        return page;
     }
 
     /**
