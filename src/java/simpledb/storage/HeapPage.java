@@ -22,10 +22,10 @@ public class HeapPage implements Page {
 
     final HeapPageId pid;
     final TupleDesc td;
-    final byte[] header;
-    final Tuple[] tuples;
-    final int numSlots;
-    final List<Integer> tupleList;
+    final byte[] header; // bitmap
+    final Tuple[] tuples; // 真正存储tuple的地方
+    final int numSlots; // 槽的容量
+    final List<Integer> tupleList; // 有效tuple的index集合
 
 
     byte[] oldData;
@@ -320,9 +320,10 @@ public class HeapPage implements Page {
         // not necessary for lab1
     }
 
+    // 自建类，用于迭代页面上的所有tuple
     private class TupIterator implements Iterator{
 
-        Iterator <Integer> realIterator;
+        Iterator <Integer> realIterator; // 这个iterator实际上是tupleList的iterator，我们包装一下；
 
         public TupIterator(Iterator <Integer> realIterator){
             this.realIterator = realIterator;
@@ -349,7 +350,7 @@ public class HeapPage implements Page {
      *         (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        getNumUnusedSlots(); // 更新tupleList
+        getNumUnusedSlots(); // 更新tupleList，确保正确性；
         return new TupIterator(tupleList.iterator());
     }
 

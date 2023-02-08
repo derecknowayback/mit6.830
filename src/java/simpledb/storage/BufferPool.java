@@ -39,11 +39,11 @@ public class BufferPool {
      */
     public static final int DEFAULT_PAGES = 50;
 
-    private final int numPages;
+    private final int numPages; //  表示当前缓存池的容量
 
-    private int requestForPage;
+    private int requestForPage; // 请求 计数器，表示当前收到了多少 "不同" 页的请求
 
-    private HashMap<PageId,Page> pageMap;
+    private HashMap<PageId,Page> pageMap; // 根据 PageId 和 Page 做映射
 
 
     /**

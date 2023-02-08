@@ -16,11 +16,11 @@ public class Tuple implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private List<Field> fields;
+    private List<Field> fields;  // fields: 字段的集合
 
-    private TupleDesc tupleDesc;
+    private TupleDesc tupleDesc; // tupleDesc：schema
 
-    private RecordId recordId;
+    private RecordId recordId; // recordId: 记录的id号
 
     /**
      * Create a new tuple with the specified schema (type).
@@ -35,6 +35,7 @@ public class Tuple implements Serializable {
         }
         this.tupleDesc = td;
         int len = td.numFields();
+        // 创建字段集合
         for (int i = 0; i < len; i++) {
             Field newField;
             if(td.getFieldType(i) == Type.INT_TYPE)
@@ -87,7 +88,7 @@ public class Tuple implements Serializable {
     public Field getField(int i) {
         if(fields == null || i >= fields.size() || i < 0 ) return null;
         Field field = fields.get(i);
-        return field; // ??? 这不是value啊
+        return field;
     }
 
     /**

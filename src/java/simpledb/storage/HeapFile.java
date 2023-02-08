@@ -77,6 +77,7 @@ public class HeapFile implements DbFile {
 
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
+        if(this.tableId != pid.getTableId()) return null;
         // 先计算偏差
         int offset = BufferPool.getPageSize() * pid.getPageNumber();
         FileInputStream inputStream = null;
@@ -87,7 +88,6 @@ public class HeapFile implements DbFile {
             byte[] buffer = new byte[BufferPool.getPageSize()];
             inputStream.read(buffer,0,BufferPool.getPageSize());
             HeapPageId heapPageId = (HeapPageId) pid;
-            this.tableId = pid.getTableId();
             heapPage = new HeapPage(heapPageId, buffer);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -129,14 +129,16 @@ public class HeapFile implements DbFile {
         return new HeapFileIterator();
     }
 
+    // 自建类，用于迭代每一个page，通过page进而迭代每一个tuple；
     private class HeapFileIterator implements DbFileIterator{
 
 
-        private int pageCursor;
+        private int pageCursor; // 标记我们遍历到哪一个page了;
 
-        private Iterator<Tuple> inPageCursor;
+        private Iterator<Tuple> inPageCursor; // cursor "within" a page，在页内做索引
 
-        private List<HeapPage> pageList;
+        private List<HeapPage> pageList; // 在 pageList
+
 
         @Override
         public void open() throws DbException, TransactionAbortedException {
@@ -160,11 +162,12 @@ public class HeapFile implements DbFile {
         @Override
         public boolean hasNext() throws DbException, TransactionAbortedException {
             if(pageCursor == numPages() || pageList == null || pageList.isEmpty()) return false;
-            if(inPageCursor.hasNext()) return true;
-            if(pageCursor == numPages() - 1) return false;
+            if(inPageCursor.hasNext()) return true; // 如果正确的话，那直接返回；
+            if(pageCursor == numPages() - 1) return false; // 如果已经是最后一页，而且上一个if不正确，那直接返回false；
+            // 到了这里说明：当前页不是最后一页且当前页已经没有tuple了，检查下一页：
             HeapPage nxtPage = prefetchPage();
-            pageCursor ++;
-            inPageCursor = nxtPage.iterator(); // 这边要及时更新Cursor,不然会出错
+            pageCursor ++; // 更新pageCursor，防止next()调用出错；
+            inPageCursor = nxtPage.iterator(); // 这边要及时更新两个Cursor,不然next()会出错
             return inPageCursor.hasNext();
         }
 
@@ -173,6 +176,7 @@ public class HeapFile implements DbFile {
             if(!hasNext()) throw new NoSuchElementException();
             // 说明这个 page 已经遍历完了, 再取一个
             if(!inPageCursor.hasNext()){
+                // 这边也要更新，不能依赖hasNext去更新，next自己也要有措施；
                 inPageCursor = prefetchPage().iterator();
                 pageCursor ++;
             }

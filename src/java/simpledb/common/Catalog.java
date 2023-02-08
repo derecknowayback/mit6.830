@@ -21,10 +21,13 @@ import java.util.*;
  */
 public class Catalog {
 
+    /**
+     *  自建的内部类, 表示一个目录的条目, 一个条目代表一个表
+     */
     private static class CataLogEntry{
-        DbFile file;
-        String name;
-        String pkeyField;
+        DbFile file; // 具体的DbFile文件
+        String name; // 条目的名字, 也就是表名
+        String pkeyField; // 表的主键名称
         public CataLogEntry(DbFile file, String name, String pkeyField){
             this.file = file;
             this.name = name;
@@ -32,11 +35,11 @@ public class Catalog {
         }
     }
 
-    private HashMap<Integer,CataLogEntry> cataLogEntries;
+    private HashMap<Integer,CataLogEntry> cataLogEntries; // 哈希表, 用于字典
 
-    private HashMap<String,Integer> nameIdMap;
+    private HashMap<String,Integer> nameIdMap; // 表名和表id的映射, 加速名字查找;
 
-    private List<Integer> idList;
+    private List<Integer> idList; // 表id 的集合, 方便遍历;
     /**
      * Constructor.
      * Creates a new, empty catalog.

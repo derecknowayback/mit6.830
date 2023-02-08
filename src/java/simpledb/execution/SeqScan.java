@@ -25,7 +25,7 @@ public class SeqScan implements OpIterator {
     private int tableid;
     private String tableAlias;
 
-    private DbFileIterator iterator;
+    private DbFileIterator iterator; // 必须作为类成员, 每个Seqscan一个；
     /**
      * Creates a sequential scan over the specified table as a part of the
      * specified transaction.
@@ -82,6 +82,7 @@ public class SeqScan implements OpIterator {
     }
 
     public void open() throws DbException, TransactionAbortedException {
+        // 一定要先赋值, 确保 接下来所有 iterator 的调用是同一个 !!!
         this.iterator = Database.getCatalog().getDatabaseFile(tableid).iterator(tid);
         iterator.open();
     }
@@ -99,7 +100,7 @@ public class SeqScan implements OpIterator {
     public TupleDesc getTupleDesc() {
         TupleDesc tupleDesc = Database.getCatalog().getTupleDesc(tableid);
         Iterator<TupleDesc.TDItem> iterator = tupleDesc.iterator();
-        Type[] typeAr = new Type[tupleDesc.numFields()];
+        Type[] typeAr = new Type[tupleDesc.numFields()]; // 注意这里不是getSize(), 应该是 numFields()
         String[] fieldAr = new String[tupleDesc.numFields()];
         int index = 0;
         while (iterator.hasNext()){
@@ -113,20 +114,24 @@ public class SeqScan implements OpIterator {
     }
 
     public boolean hasNext() throws TransactionAbortedException, DbException {
+        if(iterator == null) return false;
         return iterator.hasNext();
     }
 
     public Tuple next() throws NoSuchElementException,
             TransactionAbortedException, DbException {
+        if(iterator == null) throw new DbException("ERROR: SeqScan iterator didn't open.");
         return iterator.next();
     }
 
     public void close() {
-        iterator.close();
+        if(iterator != null)
+            iterator.close();
     }
 
     public void rewind() throws DbException, NoSuchElementException,
             TransactionAbortedException {
+        if(iterator == null)  throw new DbException("ERROR: SeqScan iterator didn't open.");
         iterator.rewind();
     }
 }

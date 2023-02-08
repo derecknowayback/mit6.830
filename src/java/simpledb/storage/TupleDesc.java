@@ -11,19 +11,19 @@ import java.util.*;
 public class TupleDesc implements Serializable {
 
     /**
-     * A help class to facilitate organizing the information of each field
+     * 这是一个内部类, 用来组织一个schema
      */
     public static class TDItem implements Serializable {
 
         private static final long serialVersionUID = 1L;
 
         /**
-         * The type of the field
+         * 字段的类型
          */
         public final Type fieldType;
 
         /**
-         * The name of the field
+         * 字段名字
          */
         public final String fieldName;
 
@@ -75,14 +75,18 @@ public class TupleDesc implements Serializable {
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         int len;
         // check length
-        if (typeAr == null || (len = typeAr.length) == 0 || fieldAr == null || fieldAr.length == 0 || len != fieldAr.length) {
+        if (typeAr == null || (len = typeAr.length) == 0) {
             System.out.println("LENGTH ERROR: Create TupleDesc Failed ...");
             return;
         }
+        boolean hasName = fieldAr != null;
         // 创建 typeList
         this.typeList = new ArrayList<>();
         for (int i = 0; i < len; i++) {
-            typeList.add(new TDItem(typeAr[i], fieldAr[i]));
+            if(hasName)
+                typeList.add(new TDItem(typeAr[i], fieldAr[i]));
+            else
+                typeList.add(new TDItem(typeAr[i], null));
         }
     }
 
@@ -94,17 +98,7 @@ public class TupleDesc implements Serializable {
      *               TupleDesc. It must contain at least one entry.
      */
     public TupleDesc(Type[] typeAr) {
-        int len;
-        if (typeAr == null || (len = typeAr.length) == 0) {
-            System.out.println("LENGTH ERROR: Create TupleDesc Failed ...");
-            return;
-        }
-        String[] fieldAr = new String[len];
-        // 创建 typeList, 这里代码和上一个方法一样, 很冗余, 不好看
-        this.typeList = new ArrayList<>();
-        for (int i = 0; i < len; i++) {
-            typeList.add(new TDItem(typeAr[i], fieldAr[i]));
-        }
+        this(typeAr,null); // 直接调用上一个构造函数;
     }
 
     public TupleDesc() {
