@@ -1,5 +1,6 @@
 package simpledb.execution;
 
+import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
@@ -14,6 +15,11 @@ public class Join extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    private JoinPredicate p;
+    private OpIterator [] children;
+
+    private Tuple outerTuple; // 这个相当于外表 (outer-table) 的计数器, 说明我们配对到哪里了
+
     /**
      * Constructor. Accepts two children to join and the predicate to join them
      * on
@@ -23,12 +29,15 @@ public class Join extends Operator {
      * @param child2 Iterator for the right(inner) relation to join
      */
     public Join(JoinPredicate p, OpIterator child1, OpIterator child2) {
-        // TODO: some code goes here
+        this.p = p;
+        // 注释规定了 child1是外表， child2是内表
+        this.children = new OpIterator[]{child1,child2};
+        // 外表的tuple设置为null
+        this.outerTuple = null;
     }
 
     public JoinPredicate getJoinPredicate() {
-        // TODO: some code goes here
-        return null;
+        return p;
     }
 
     /**
@@ -36,8 +45,8 @@ public class Join extends Operator {
      *         alias or table name.
      */
     public String getJoinField1Name() {
-        // TODO: some code goes here
-        return null;
+        int field1 = p.getField1();
+        return children[0].getTupleDesc().getFieldName(field1); // TODO buggy!!!
     }
 
     /**
@@ -45,8 +54,8 @@ public class Join extends Operator {
      *         alias or table name.
      */
     public String getJoinField2Name() {
-        // TODO: some code goes here
-        return null;
+        int field2 = p.getField2();
+        return children[1].getTupleDesc().getFieldName(field2); // TODO buggy!!!
     }
 
     /**
@@ -54,21 +63,27 @@ public class Join extends Operator {
      *         implementation logic.
      */
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return TupleDesc.merge(children[0].getTupleDesc(), children[1].getTupleDesc());
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
-        // TODO: some code goes here
+        // 老样子，先开自己，再开外表、内表
+        super.open();
+        children[0].open();
+        children[1].open();
     }
 
     public void close() {
-        // TODO: some code goes here
+        children[0].close();
+        children[1].close();
+        super.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+       children[0].rewind();
+       outerTuple = null; // 记得这里要重新设置为 null
+       children[1].rewind();
     }
 
     /**
@@ -90,19 +105,53 @@ public class Join extends Operator {
      * @see JoinPredicate#filter
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        // TODO: some code goes here
-        return null;
+        Tuple tuple1 = null, tuple2 = null;
+        if(outerTuple == null){
+            if(children[0].hasNext())
+                outerTuple = children[0].next();
+            else return null; // outer 表没有结果, 直接返回 null
+        }
+        // nested-loop
+        while (true) {
+            boolean hasFound = false;
+            // 循环整个内表，和当前的outerTuple比较
+            while (children[1].hasNext()){
+                tuple1 = outerTuple;
+                tuple2 = children[1].next();
+                if(p.filter(tuple1,tuple2)){
+                    hasFound = true;
+                    break;
+                }
+            }
+            if(hasFound) break;
+            // 到了这里说明上面都没有找到, 去找下一个outerTuple
+            if(children[0].hasNext()){
+                outerTuple = children[0].next(); // outer-table 下一条
+                children[1].rewind(); // 别忘了rewind inner-table
+            }
+            else
+                return null; // 说明 outer 表已经遍历完了
+        }
+        // 无脑拼接，不需要去重什么的，
+        int len1 = tuple1.getTupleDesc().numFields(), len2 = tuple2.getTupleDesc().numFields();
+        Tuple res = new Tuple(getTupleDesc()); // 利用新的tupleDesc
+        for (int i = 0; i < len1; i++) {
+            res.setField(i, tuple1.getField(i));
+        }
+        for (int i = len1; i < len1 + len2; i++) {
+            res.setField(i, tuple2.getField(i - len1));
+        }
+        return res;
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // TODO: some code goes here
-        return null;
+        return children;
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // TODO: some code goes here
+        this.children = children;
     }
 
 }

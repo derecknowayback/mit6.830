@@ -14,6 +14,9 @@ public class Filter extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    private Predicate p;
+    private OpIterator child;
+
     /**
      * Constructor accepts a predicate to apply and a child operator to read
      * tuples to filter from.
@@ -22,30 +25,31 @@ public class Filter extends Operator {
      * @param child The child operator
      */
     public Filter(Predicate p, OpIterator child) {
-        // TODO: some code goes here
+        this.p = p;
+        this.child = child;
     }
 
     public Predicate getPredicate() {
-        // TODO: some code goes here
-        return null;
+        return p;
     }
 
     public TupleDesc getTupleDesc() {
-        // TODO: some code goes here
-        return null;
+        return child.getTupleDesc();
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
-        // TODO: some code goes here
+        super.open(); // 先 open 自己, open使用super就好
+        child.open(); // 再 open 子节点
     }
 
     public void close() {
-        // TODO: some code goes here
+        child.close(); // 先关闭孩子
+        super.close(); // 再关闭自己
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // TODO: some code goes here
+        child.rewind(); // 孩子rewind了就好
     }
 
     /**
@@ -59,19 +63,23 @@ public class Filter extends Operator {
      */
     protected Tuple fetchNext() throws NoSuchElementException,
             TransactionAbortedException, DbException {
-        // TODO: some code goes here
+       while (child.hasNext()){
+           Tuple next = child.next();
+           if(p.filter(next))
+               return next;
+       }
         return null;
     }
 
     @Override
     public OpIterator[] getChildren() {
-        // TODO: some code goes here
-        return null;
+        return new OpIterator[]{child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-        // TODO: some code goes here
+       if(children == null) return;
+       child = children[0];
     }
 
 }
