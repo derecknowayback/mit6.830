@@ -2,6 +2,7 @@ package simpledb.execution;
 
 import simpledb.common.DbException;
 import simpledb.common.Type;
+import simpledb.storage.IntField;
 import simpledb.storage.Tuple;
 import simpledb.storage.TupleDesc;
 import simpledb.transaction.TransactionAbortedException;
@@ -109,13 +110,16 @@ public class Aggregate extends Operator {
     public void open() throws NoSuchElementException, DbException,
             TransactionAbortedException {
         super.open();
+        child.open(); // 一定要先open子节点才可以hasNext
+        int average = 0, count = 0, sum = 0;
+        // 这个时候子节点已经做完了所有工作了，我们要拿到子节点的所有tuple;
         while (child.hasNext()){
-            aggregator.mergeTupleIntoGroup(child.next());
+            Tuple next = child.next();
+            aggregator.mergeTupleIntoGroup(next);
         }
         OpIterator real = aggregator.iterator();
         real.open();
         iterator = real;
-        child.open();
     }
 
     /**

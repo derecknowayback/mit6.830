@@ -23,7 +23,6 @@ public class AggregateTest extends SimpleDbTestBase {
         TransactionId tid = new TransactionId();
         SeqScan ss = new SeqScan(tid, table.getId(), "");
         Aggregate ag = new Aggregate(ss, aggregateColumn, groupColumn, operation);
-
         SystemTestUtil.matchTuples(ag, expectedResult);
         Database.getBufferPool().transactionComplete(tid);
     }

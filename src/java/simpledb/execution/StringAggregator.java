@@ -36,6 +36,7 @@ public class StringAggregator implements Aggregator {
      * @throws IllegalArgumentException if what != COUNT
      */
 
+    // String 只需要支持 COUNT 就可以了
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
         if(what != Op.COUNT) throw new IllegalArgumentException();
         this.gbfield = gbfield;

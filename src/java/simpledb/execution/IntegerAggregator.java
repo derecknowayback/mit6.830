@@ -15,28 +15,19 @@ import java.util.*;
  */
 public class IntegerAggregator implements Aggregator {
 
-    public static void main(String[] args) {
-        HashMap<Integer, Integer> hashMap = new HashMap<>();
-        hashMap.merge(1,1,(a,b) -> (a + 1));
-        hashMap.merge(1,1,(a,b) -> (a + 1));
-        hashMap.merge(1,1,(a,b) -> (a + 1));
-        System.out.println(hashMap.get(1));
-    }
-
-
     private static final long serialVersionUID = 1L;
 
-    private static final Field emptyFiled = new IntField(-1);
+    private static final Field emptyFiled = new IntField(-1);  // 空filed，负责no-group的时候统一聚合
 
     private int gbfield;
     private int afield;
     private Op what;
 
-    private TupleDesc aggSchema;
+    private TupleDesc aggSchema; // aggSchema 新的tupleDesc
 
-    private HashMap<Field,Integer> aggregation;
+    private HashMap<Field,List<Integer>> aggregation; // 保存某一个聚类的所有值
 
-    private HashMap<Field,Integer> aggResult;
+    private HashMap<Field,Integer> aggResult; // 保存聚合的结果
 
     /**
      * Aggregate constructor
@@ -77,7 +68,13 @@ public class IntegerAggregator implements Aggregator {
         else
             field = emptyFiled; // 如果没有分类的话, 就一直用这个emptyFiled
         int value = ((IntField)tup.getField(afield)).getValue();
-        aggregation.merge(field,1,(a,b) -> (a + 1));
+        List<Integer> list = aggregation.get(field);
+        if(list != null) list.add(value);
+        else {
+            list = new ArrayList<>();
+            list.add(value);
+            aggregation.put(field,list);
+        }
         // 开始计算聚合
         // MIN, MAX, SUM, AVG, COUNT,
         switch (what) {
@@ -88,7 +85,7 @@ public class IntegerAggregator implements Aggregator {
                 doMax(field, value);
                 break;
             case AVG:
-                doAVG(field, value);
+                doAVG(field);
                 break;
             case SUM:
                 doSum(field, value);
@@ -99,23 +96,30 @@ public class IntegerAggregator implements Aggregator {
         }
     }
 
+    // 新发现的lambda型api，merge的写法很优雅
     private void doMax(Field f, int value) {
         aggResult.merge(f, value, Math::max);
     }
 
     private void doCount(Field f) {
-        aggResult.put(f,aggregation.get(f));
+        aggResult.put(f,aggregation.get(f).size());
     }
 
     private void doSum(Field f, int value) {
         aggResult.merge(f,value, Integer::sum);
     }
 
-    private void doAVG(Field f, int value) {
-        aggResult.merge(f,value,(a,b) ->{
-            int size = aggregation.get(f);
-            return ((size - 1) * a + b) / size;
-        });
+    // avg是最麻烦的，需要我们保存所有的数据，重新遍历再求结果 ;
+    // (注意： 不能只保存上一次的avg，然后用 newAvg = (oldAvg * (size - 1) + value) / size，
+    // 不能这样写的原因是：我们做的是整数除法，每次都会有偏差，所以之后偏差会越来越多)
+    private void doAVG(Field f) {
+        List<Integer> integers = aggregation.get(f);
+        int sum = 0, avg;
+        for (int k : integers) {
+            sum += k;
+        }
+        avg = sum / integers.size();
+        aggResult.merge(f,avg,(a,b) ->avg);
     }
 
     private void doMin(Field f,int value) {

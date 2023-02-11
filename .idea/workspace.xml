@@ -2,19 +2,11 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="bb6d77a5-7dd7-4dcf-8bb2-77e889c0c9fd" name="变更" comment="">
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Filter.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Filter.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Join.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Join.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/JoinPredicate.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/JoinPredicate.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Predicate$Op.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Predicate$Op.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Predicate.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Predicate.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/SeqScan.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/SeqScan.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notes/lab2-notes.md" beforeDir="false" afterPath="$PROJECT_DIR$/notes/lab2-notes.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/Aggregate.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/Aggregate.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/Filter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/Filter.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/IntegerAggregator.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/IntegerAggregator.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/Join.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/Join.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/JoinPredicate.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/JoinPredicate.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/Predicate.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/Predicate.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/StringAggregator.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/StringAggregator.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/simpledb/systemtest/AggregateTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/test/simpledb/systemtest/AggregateTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,10 +65,25 @@
       <recent name="D:\b_project\databases\mit6.830\simple-db-hw-2022\src\java" />
     </key>
   </component>
-  <component name="RunManager" selected="JUnit.AggregateTest">
+  <component name="RunManager" selected="JUnit.AggregateTest (1)">
     <configuration name="SimpleDb" type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="simpledb.SimpleDb" />
       <module name="simple-db-hw-2022" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="AggregateTest (1)" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="simple-db-hw-2022" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="simpledb.systemtest.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="simpledb.systemtest" />
+      <option name="MAIN_CLASS_NAME" value="simpledb.systemtest.AggregateTest" />
+      <option name="TEST_OBJECT" value="class" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -92,22 +99,6 @@
       <option name="PACKAGE_NAME" value="simpledb" />
       <option name="MAIN_CLASS_NAME" value="simpledb.AggregateTest" />
       <option name="TEST_OBJECT" value="class" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="AggregateTest.getTupleDesc" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="simple-db-hw-2022" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="simpledb.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="simpledb" />
-      <option name="MAIN_CLASS_NAME" value="simpledb.AggregateTest" />
-      <option name="METHOD_NAME" value="getTupleDesc" />
-      <option name="TEST_OBJECT" value="method" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -128,51 +119,53 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="IntegerAggregatorTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+    <configuration name="AggregateTest.testAverage" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
       <module name="simple-db-hw-2022" />
       <extension name="coverage">
         <pattern>
-          <option name="PATTERN" value="simpledb.*" />
+          <option name="PATTERN" value="simpledb.systemtest.*" />
           <option name="ENABLED" value="true" />
         </pattern>
       </extension>
-      <option name="PACKAGE_NAME" value="simpledb" />
-      <option name="MAIN_CLASS_NAME" value="simpledb.IntegerAggregatorTest" />
-      <option name="TEST_OBJECT" value="class" />
+      <option name="PACKAGE_NAME" value="simpledb.systemtest" />
+      <option name="MAIN_CLASS_NAME" value="simpledb.systemtest.AggregateTest" />
+      <option name="METHOD_NAME" value="testAverage" />
+      <option name="TEST_OBJECT" value="method" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="StringAggregatorTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+    <configuration name="AggregateTest.testSum" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
       <module name="simple-db-hw-2022" />
       <extension name="coverage">
         <pattern>
-          <option name="PATTERN" value="simpledb.*" />
+          <option name="PATTERN" value="simpledb.systemtest.*" />
           <option name="ENABLED" value="true" />
         </pattern>
       </extension>
-      <option name="PACKAGE_NAME" value="simpledb" />
-      <option name="MAIN_CLASS_NAME" value="simpledb.StringAggregatorTest" />
-      <option name="TEST_OBJECT" value="class" />
+      <option name="PACKAGE_NAME" value="simpledb.systemtest" />
+      <option name="MAIN_CLASS_NAME" value="simpledb.systemtest.AggregateTest" />
+      <option name="METHOD_NAME" value="testSum" />
+      <option name="TEST_OBJECT" value="method" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
     </configuration>
     <list>
+      <item itemvalue="JUnit.AggregateTest (1)" />
+      <item itemvalue="JUnit.AggregateTest.testAverage" />
+      <item itemvalue="JUnit.AggregateTest.testSum" />
       <item itemvalue="JUnit.AggregateTest" />
-      <item itemvalue="JUnit.AggregateTest.getTupleDesc" />
       <item itemvalue="JUnit.AggregateTest.rewind" />
-      <item itemvalue="JUnit.IntegerAggregatorTest" />
-      <item itemvalue="JUnit.StringAggregatorTest" />
       <item itemvalue="应用程序.SimpleDb" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="JUnit.AggregateTest (1)" />
+        <item itemvalue="JUnit.AggregateTest.testAverage" />
+        <item itemvalue="JUnit.AggregateTest.testSum" />
         <item itemvalue="JUnit.AggregateTest" />
         <item itemvalue="JUnit.AggregateTest.rewind" />
-        <item itemvalue="JUnit.AggregateTest.getTupleDesc" />
-        <item itemvalue="JUnit.StringAggregatorTest" />
-        <item itemvalue="JUnit.IntegerAggregatorTest" />
       </list>
     </recent_temporary>
   </component>
@@ -200,6 +193,7 @@
       <workItem from="1675849330504" duration="1326000" />
       <workItem from="1675941673137" duration="18275000" />
       <workItem from="1676036234318" duration="9769000" />
+      <workItem from="1676046328725" duration="6537000" />
     </task>
     <servers />
   </component>
@@ -237,6 +231,11 @@
         <PinnedItemInfo parentTag="simpledb.execution.IntegerAggregator" memberName="aggregation" />
       </pinned-members>
     </pin-to-top-manager>
+    <watches-manager>
+      <configuration name="JUnit">
+        <watch expression="((IntegerAggregator)((Aggregate)this).aggregator).aggResult" custom="simpledb.execution.IntegerAggregator,simpledb.execution.Aggregate" />
+      </configuration>
+    </watches-manager>
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

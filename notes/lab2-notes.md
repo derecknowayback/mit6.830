@@ -413,7 +413,386 @@ public class Join extends Operator {
 
 **Exercise 2**
 
-> src/java/simpledb/execution/IntegerAggregator.java src/java/simpledb/execution/StringAggregator.java src/java/simpledb/execution/Aggregate.java
+> src/java/simpledb/execution/IntegerAggregator.java 
+>
+> src/java/simpledb/execution/StringAggregator.java 
+>
+> src/java/simpledb/execution/Aggregate.java
 
 代码应该通过单元测试IntegerAggregatorTest、StringAggregatorTest和AggregateTest。此外，您应该能够通过AggregateTest系统测试。
 
+
+
+## IntegerAggregator.java
+
+这次实验指导书说的也不明确，IntegerAggregator到底是指 "分组Filed是IntType" 还是 "聚合Filed是IntType"，看了测试类才知道 IntegerAggregator 是指聚合类是IntType；
+
+```java
+public class IntegerAggregator implements Aggregator {
+
+    private static final long serialVersionUID = 1L;
+
+    private static final Field emptyFiled = new IntField(-1);  // 空filed，负责no-group的时候统一聚合
+
+    private int gbfield;
+    private int afield;
+    private Op what;
+
+    private TupleDesc aggSchema; // aggSchema 新的tupleDesc
+
+    private HashMap<Field,List<Integer>> aggregation; // 保存某一个聚类的所有值
+
+    private HashMap<Field,Integer> aggResult; // 保存聚合的结果
+
+    /**
+     * Aggregate constructor
+     *
+     * @param gbfield     the 0-based index of the group-by field in the tuple, or
+     *                    NO_GROUPING if there is no grouping
+     * @param gbfieldtype the type of the group by field (e.g., Type.INT_TYPE), or null
+     *                    if there is no grouping
+     * @param afield      the 0-based index of the aggregate field in the tuple
+     * @param what        the aggregation operator
+     */
+
+    public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
+        this.gbfield = gbfield;
+        this.afield = afield;
+        this.what = what;
+        this.aggregation = new HashMap<>();
+        this.aggResult = new HashMap<>();
+        // 生成聚合schema
+        Type[] types = null;
+        if(gbfield == NO_GROUPING)
+            types = new Type[]{Type.INT_TYPE};
+        else
+            types = new Type[]{gbfieldtype,Type.INT_TYPE};
+        this.aggSchema = new TupleDesc(types);
+    }
+
+    /**
+     * Merge a new tuple into the aggregate, grouping as indicated in the
+     * constructor
+     *
+     * @param tup the Tuple containing an aggregate field and a group-by field
+     */
+    public void mergeTupleIntoGroup(Tuple tup) {
+        Field field = null;
+        if(gbfield != NO_GROUPING)
+            field = tup.getField(gbfield);
+        else
+            field = emptyFiled; // 如果没有分类的话, 就一直用这个emptyFiled
+        int value = ((IntField)tup.getField(afield)).getValue();
+        List<Integer> list = aggregation.get(field);
+        if(list != null) list.add(value);
+        else {
+            list = new ArrayList<>();
+            list.add(value);
+            aggregation.put(field,list);
+        }
+        // 开始计算聚合
+        // MIN, MAX, SUM, AVG, COUNT,
+        switch (what) {
+            case MIN:
+                doMin(field, value);
+                break;
+            case MAX:
+                doMax(field, value);
+                break;
+            case AVG:
+                doAVG(field);
+                break;
+            case SUM:
+                doSum(field, value);
+                break;
+            case COUNT:
+                doCount(field);
+                break;
+        }
+    }
+
+    // 新发现的lambda型api，merge的写法很优雅
+    private void doMax(Field f, int value) {
+        aggResult.merge(f, value, Math::max);
+    }
+
+    private void doCount(Field f) {
+        aggResult.put(f,aggregation.get(f).size());
+    }
+
+    private void doSum(Field f, int value) {
+        aggResult.merge(f,value, Integer::sum);
+    }
+
+    // avg是最麻烦的，需要我们保存所有的数据，重新遍历再求结果 ;
+    // (注意： 不能只保存上一次的avg，然后用 newAvg = (oldAvg * (size - 1) + value) / size，
+    // 不能这样写的原因是：我们做的是整数除法，每次都会有偏差，所以之后偏差会越来越多)
+    private void doAVG(Field f) {
+        List<Integer> integers = aggregation.get(f);
+        int sum = 0, avg;
+        for (int k : integers) {
+            sum += k;
+        }
+        avg = sum / integers.size();
+        aggResult.merge(f,avg,(a,b) ->avg);
+    }
+
+    private void doMin(Field f,int value) {
+        aggResult.merge(f, value, Math::min);
+    }
+
+
+    /**
+     * Create a OpIterator over group aggregate results.
+     *
+     * @return a OpIterator whose tuples are the pair (groupVal, aggregateVal)
+     *         if using group, or a single (aggregateVal) if no grouping. The
+     *         aggregateVal is determined by the type of aggregate specified in
+     *         the constructor.
+     */
+    public OpIterator iterator() {
+        return new IntAggIterator();
+    }
+
+    private class IntAggIterator implements OpIterator{
+
+        private List<Tuple> aggTuples;
+
+        private Iterator<Tuple> tupleIterator;
+
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            aggTuples = new ArrayList<>();
+            for (Field f: aggResult.keySet()){
+                int value = aggResult.get(f);
+                Tuple tuple = new Tuple(aggSchema);
+                if(gbfield == NO_GROUPING){
+                    tuple.setField(0,new IntField(value));
+                }else{
+                    tuple.setField(0,f);
+                    tuple.setField(1,new IntField(value));
+                }
+                aggTuples.add(tuple);
+            }
+            tupleIterator = aggTuples.iterator();
+        }
+
+        @Override
+        public TupleDesc getTupleDesc() {
+            return aggSchema;
+        }
+}
+```
+
+这里AVG耽误了一会时间，原先自作聪明只存旧的avg，后来发现**整数除法不靠谱**，就会和答案出现偏差；
+
+
+
+## StringAggregator.java 
+
+和IntAggregator差不多，只不过因为聚合Field是String，所以只需要支持count就好了；
+
+```java
+public class StringAggregator implements Aggregator {
+
+    private static final long serialVersionUID = 1L;
+
+    private static final Field emptyFiled = new StringField("",1);
+
+    private int gbfield;
+
+    private Op what;
+
+    private TupleDesc aggSchema;
+
+    private HashMap<Field,Integer> aggregation;
+
+    /**
+     * Aggregate constructor
+     *
+     * @param gbfield     the 0-based index of the group-by field in the tuple, or NO_GROUPING if there is no grouping
+     * @param gbfieldtype the type of the group by field (e.g., Type.INT_TYPE), or null if there is no grouping
+     * @param afield      the 0-based index of the aggregate field in the tuple
+     * @param what        aggregation operator to use -- only supports COUNT
+     * @throws IllegalArgumentException if what != COUNT
+     */
+
+    // String 只需要支持 COUNT 就可以了
+    public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
+        // 如果 Op 不是count,那么就抛出异常;
+        if(what != Op.COUNT) throw new IllegalArgumentException();
+        this.gbfield = gbfield;
+        // 我们只关心count，所以具体的value值是什么我们不关心了，所以不需要afield
+        this.what = what;
+        this.aggregation = new HashMap<>();
+        // 生成聚合schema
+        Type[] types = null;
+        if(gbfield == NO_GROUPING)
+            types = new Type[]{Type.INT_TYPE};
+        else
+            types = new Type[]{gbfieldtype,Type.INT_TYPE};
+        this.aggSchema = new TupleDesc(types);
+    }
+
+    /**
+     * Merge a new tuple into the aggregate, grouping as indicated in the constructor
+     *
+     * @param tup the Tuple containing an aggregate field and a group-by field
+     */
+    public void mergeTupleIntoGroup(Tuple tup) {
+        Field field = null;
+        if(gbfield != NO_GROUPING)
+            field = tup.getField(gbfield);
+        else
+            field = emptyFiled; // 如果没有分类的话, 就一直用这个emptyFiled
+        aggregation.merge(field,1,(a,b) -> (a + 1)); // count ++
+    }
+
+
+    public OpIterator iterator() {
+        return new StringAggIterator();
+    }
+
+    private class StringAggIterator implements OpIterator{
+
+        List<Tuple> tupleList;
+        Iterator<Tuple> iterator;
+        
+		// ... 剩下的和Int一样
+    }
+}
+```
+
+
+
+## Aggregate.java
+
+```java
+public class Aggregate extends Operator {
+
+    private static final long serialVersionUID = 1L;
+
+    private Aggregator aggregator;
+
+    private int gfield;
+    private int afield;
+    private String groupFieldName;
+    private String aggregateFieldName;
+
+    private Aggregator.Op aop;
+
+    private OpIterator iterator;
+    private OpIterator child;
+
+
+    /**
+     * Constructor.
+     * <p>
+     * Implementation hint: depending on the type of afield, you will want to
+     * construct an {@link IntegerAggregator} or {@link StringAggregator} to help
+     * you with your implementation of readNext().
+     *
+     * @param child  The OpIterator that is feeding us tuples.
+     * @param afield The column over which we are computing an aggregate.
+     * @param gfield The column over which we are grouping the result, or -1 if
+     *               there is no grouping
+     * @param aop    The aggregation operator to use
+     */
+    public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
+        this.afield = afield;
+        aggregateFieldName = child.getTupleDesc().getFieldName(afield);
+        this.gfield =gfield;
+        this.groupFieldName = null;
+        this.aop = aop;
+        this.child = child;
+        Type aggType = child.getTupleDesc().getFieldType(afield), groupType = null;
+        if(gfield != Aggregator.NO_GROUPING){
+            groupType = child.getTupleDesc().getFieldType(gfield);
+            groupFieldName = child.getTupleDesc().getFieldName(gfield);
+        }
+        if(aggType == Type.INT_TYPE){
+            aggregator = new IntegerAggregator(gfield,groupType,afield,aop);
+        }else{
+            aggregator = new StringAggregator(gfield,groupType,afield,aop);
+        }
+    }
+
+
+    public void open() throws NoSuchElementException, DbException,
+            TransactionAbortedException {
+        super.open(); // 要调用父类的open!!!
+        child.open(); // 一定要先open子节点才可以hasNext!!!
+        int average = 0, count = 0, sum = 0;
+        // 这个时候子节点已经做完了所有工作了，我们要拿到子节点的所有tuple;
+        while (child.hasNext()){
+            Tuple next = child.next();
+            aggregator.mergeTupleIntoGroup(next);
+        }
+        OpIterator real = aggregator.iterator();
+        real.open();
+        iterator = real;
+    }
+
+
+    /**
+     * Returns the TupleDesc of this Aggregate. If there is no group by field,
+     * this will have one field - the aggregate column. If there is a group by
+     * field, the first field will be the group by field, and the second will be
+     * the aggregate value column.
+     * <p>
+     * The name of an aggregate column should be informative. For example:
+     * "aggName(aop) (child_td.getFieldName(afield))" where aop and afield are
+     * given in the constructor, and child_td is the TupleDesc of the child
+     * iterator.
+     */
+    public TupleDesc getTupleDesc() {
+        TupleDesc tupleDesc = child.getTupleDesc();
+        int numFields = gfield == Aggregator.NO_GROUPING ? 1 : 2;
+        Type[] types = new Type[numFields];
+        String[] names = new String[numFields];
+//        String aggName = aggregateFieldName + "(" + aop + ")("  + child.getTupleDesc() + ".getFieldName(" + afield + "))";
+        String aggName = aggregateFieldName;
+        if(numFields == 2){
+            types[0] = tupleDesc.getFieldType(gfield);
+            names[0] = groupFieldName;
+        }
+        types[numFields - 1] = tupleDesc.getFieldType(afield);
+        names[numFields - 1] = aggName;
+        return new TupleDesc(types,names);
+    }
+
+    public void close() {
+        child.close();
+        super.close();
+        iterator.close();
+    }
+}
+```
+
+
+
+主要问题出在下面这个函数，注释的3个点在debug的时候很困扰：
+
+```java
+    public void open() throws NoSuchElementException, DbException,
+            TransactionAbortedException {
+        super.open(); // 要调用父类的open!!! 不然测试不通过;
+        child.open(); // 一定要先open子节点才可以hasNext!!!
+        int average = 0, count = 0, sum = 0;
+// 这个时候子节点已经做完了所有工作了，我们要拿到子节点的所有tuple;(不这样做会没有tuple,我们需要自己从子节点拿tuple)
+        while (child.hasNext()){
+            Tuple next = child.next();
+            aggregator.mergeTupleIntoGroup(next);
+        }
+        OpIterator real = aggregator.iterator();
+        real.open();
+        iterator = real;
+    }
+```
+
+
+
+还有下面这个注释，不能按注释这样改aggField的name，不能修改column-name，按照注释做反而会出错：
+
+> The name of an aggregate column should be informative. For example: "aggName(aop) (child_td.getFieldName(afield))" where aop and afield are given in the constructor, and child_td is the TupleDesc of the child iterator.
