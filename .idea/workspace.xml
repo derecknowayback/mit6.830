@@ -2,23 +2,11 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="bb6d77a5-7dd7-4dcf-8bb2-77e889c0c9fd" name="变更" comment="">
-      <change beforePath="$PROJECT_DIR$/notes/lab2-notes.md" beforeDir="false" afterPath="$PROJECT_DIR$/notes/lab2-notes.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Aggregate.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/Aggregate.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/IntegerAggregator$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/IntegerAggregator$1.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/IntegerAggregator$IntAggIterator.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/IntegerAggregator$IntAggIterator.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/IntegerAggregator.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/IntegerAggregator.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/StringAggregator$StringAggIterator.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/StringAggregator$StringAggIterator.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/StringAggregator.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/execution/StringAggregator.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/BufferPool.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/BufferPool.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapFile$HeapFileIterator.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapFile$HeapFileIterator.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapFile.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapFile.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapPage$TupIterator.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapPage$TupIterator.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapPage.class" beforeDir="false" afterPath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/storage/HeapPage.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/Delete.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/Delete.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/execution/Insert.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/execution/Insert.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/storage/BufferPool.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/storage/BufferPool.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/storage/HeapFile.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/storage/HeapFile.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/java/simpledb/storage/HeapPage.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/storage/HeapPage.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notes/lab3-notes.md" beforeDir="false" afterPath="$PROJECT_DIR$/notes/lab3-notes.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/optimizer/IntHistogram.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/out/production/simple-db-hw-2022/simpledb/optimizer/TableStats.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/simpledb/optimizer/IntHistogram.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/optimizer/IntHistogram.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/java/simpledb/optimizer/TableStats.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/java/simpledb/optimizer/TableStats.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -77,7 +65,7 @@
       <recent name="D:\b_project\databases\mit6.830\simple-db-hw-2022\src\java" />
     </key>
   </component>
-  <component name="RunManager" selected="JUnit.EvictionTest">
+  <component name="RunManager" selected="JUnit.IntHistogramTest">
     <configuration name="SimpleDb" type="Application" factoryName="Application">
       <option name="MAIN_CLASS_NAME" value="simpledb.SimpleDb" />
       <module name="simple-db-hw-2022" />
@@ -115,22 +103,7 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="InsertTest (1)" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
-      <module name="simple-db-hw-2022" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="simpledb.systemtest.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <option name="PACKAGE_NAME" value="simpledb.systemtest" />
-      <option name="MAIN_CLASS_NAME" value="simpledb.systemtest.InsertTest" />
-      <option name="TEST_OBJECT" value="class" />
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="InsertTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+    <configuration name="IntHistogramTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
       <module name="simple-db-hw-2022" />
       <extension name="coverage">
         <pattern>
@@ -139,43 +112,59 @@
         </pattern>
       </extension>
       <option name="PACKAGE_NAME" value="simpledb" />
-      <option name="MAIN_CLASS_NAME" value="simpledb.InsertTest" />
+      <option name="MAIN_CLASS_NAME" value="simpledb.IntHistogramTest" />
       <option name="TEST_OBJECT" value="class" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
     </configuration>
-    <configuration name="InsertTest.testEmptyToEmpty" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+    <configuration name="IntHistogramTest.negativeRangeTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
       <module name="simple-db-hw-2022" />
       <extension name="coverage">
         <pattern>
-          <option name="PATTERN" value="simpledb.systemtest.*" />
+          <option name="PATTERN" value="simpledb.*" />
           <option name="ENABLED" value="true" />
         </pattern>
       </extension>
-      <option name="PACKAGE_NAME" value="simpledb.systemtest" />
-      <option name="MAIN_CLASS_NAME" value="simpledb.systemtest.InsertTest" />
-      <option name="METHOD_NAME" value="testEmptyToEmpty" />
+      <option name="PACKAGE_NAME" value="simpledb" />
+      <option name="MAIN_CLASS_NAME" value="simpledb.IntHistogramTest" />
+      <option name="METHOD_NAME" value="negativeRangeTest" />
+      <option name="TEST_OBJECT" value="method" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="IntHistogramTest.opLessThanOrEqualsTest" type="JUnit" factoryName="JUnit" temporary="true" nameIsGenerated="true">
+      <module name="simple-db-hw-2022" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="simpledb.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <option name="PACKAGE_NAME" value="simpledb" />
+      <option name="MAIN_CLASS_NAME" value="simpledb.IntHistogramTest" />
+      <option name="METHOD_NAME" value="opLessThanOrEqualsTest" />
       <option name="TEST_OBJECT" value="method" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
     </configuration>
     <list>
+      <item itemvalue="JUnit.IntHistogramTest" />
+      <item itemvalue="JUnit.IntHistogramTest.negativeRangeTest" />
+      <item itemvalue="JUnit.IntHistogramTest.opLessThanOrEqualsTest" />
       <item itemvalue="JUnit.DeleteTest" />
       <item itemvalue="JUnit.EvictionTest" />
-      <item itemvalue="JUnit.InsertTest" />
-      <item itemvalue="JUnit.InsertTest (1)" />
-      <item itemvalue="JUnit.InsertTest.testEmptyToEmpty" />
       <item itemvalue="应用程序.SimpleDb" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="JUnit.IntHistogramTest" />
+        <item itemvalue="JUnit.IntHistogramTest.opLessThanOrEqualsTest" />
+        <item itemvalue="JUnit.IntHistogramTest.negativeRangeTest" />
         <item itemvalue="JUnit.EvictionTest" />
         <item itemvalue="JUnit.DeleteTest" />
-        <item itemvalue="JUnit.InsertTest (1)" />
-        <item itemvalue="JUnit.InsertTest.testEmptyToEmpty" />
-        <item itemvalue="JUnit.InsertTest" />
       </list>
     </recent_temporary>
   </component>
@@ -206,6 +195,9 @@
       <workItem from="1676046328725" duration="9470000" />
       <workItem from="1676126277980" duration="8071000" />
       <workItem from="1676172175517" duration="11671000" />
+      <workItem from="1676195495793" duration="8925000" />
+      <workItem from="1676208597731" duration="1928000" />
+      <workItem from="1676210795268" duration="2036000" />
     </task>
     <servers />
   </component>
@@ -234,6 +226,11 @@
           <url>file://$PROJECT_DIR$/test/simpledb/IntegerAggregatorTest.java</url>
           <line>80</line>
           <option name="timeStamp" value="27" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/test/simpledb/IntHistogramTest.java</url>
+          <line>60</line>
+          <option name="timeStamp" value="32" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

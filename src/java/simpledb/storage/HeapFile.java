@@ -94,13 +94,13 @@ public class HeapFile implements DbFile {
         return heapPage;
     }
 
-    // see DbFile.java for javadocs
+    // 将指定的page写到磁盘上
     public void writePage(Page page) throws IOException {
         HeapPage heapPage = (HeapPage) page;
         int offset = heapPage.getId().getPageNumber() * BufferPool.getPageSize();
         try {
             RandomAccessFile rw = new RandomAccessFile(f, "rw");
-            rw.seek(offset);
+            rw.seek(offset); // 记得seek
             rw.write(heapPage.getPageData());
         }catch (IOException e){
             throw e;
@@ -111,19 +111,19 @@ public class HeapFile implements DbFile {
      * Returns the number of pages in this HeapFile.
      */
     public int numPages() {
+        // 这个公式是没有错的;
         return  (int) Math.floor(f.length() * 1.0 / BufferPool.getPageSize());
     }
 
     // see DbFile.java for javadocs
     public List<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        boolean insertSuccess = false;
+        boolean insertSuccess = false; // 需要有一个flag来标志我们是否插入成功
         List<Page> res = new ArrayList<>();
         for (int i =0; i < numPages(); i ++) {
             HeapPageId pageId = new HeapPageId(tableId, i);
             HeapPage page = (HeapPage)Database.getBufferPool().getPage(tid, pageId, null);
             int numUnusedSlots = page.getNumUnusedSlots();
-//            System.out.println(numUnusedSlots);
             if(numUnusedSlots != 0){
                 page.insertTuple(t);
                 // page.markDirty(true,tid); 这边暂时不要markDirty，交给buffer-pool
@@ -132,16 +132,17 @@ public class HeapFile implements DbFile {
                 break;
             }
         }
-        // 如果没有页可以容纳，那么我们就添加一个新页
+        // !!!如果没有页可以容纳，那么我们就添加一个新页
         if(!insertSuccess){
             try {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(f,"rw");
-                byte[] empty = new byte[BufferPool.getPageSize()];
+                // 开始创建一个新的page,准备写到磁盘上;
+                byte[] empty = HeapPage.createEmptyPageData();
                 HeapPage heapPage = new HeapPage(new HeapPageId(tableId, numPages()), empty);
                 heapPage.insertTuple(t);
-                randomAccessFile.seek(f.length());
+                randomAccessFile.seek(f.length()); // 记得seek
                 randomAccessFile.write(heapPage.getPageData());
-                res.add(heapPage);
+                res.add(heapPage); // 记得加到res中;
             }catch (IOException e){
                 throw e;
             }

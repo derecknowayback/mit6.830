@@ -24,7 +24,7 @@ public class Insert extends Operator {
     private OpIterator child;
     private int tableId;
 
-    private int callTime;
+    private int callTime; // 用来记录 fetchNext调用了几次
 
     private TupleDesc tupleDesc;
     /**
@@ -89,7 +89,7 @@ public class Insert extends Operator {
             }
         }
         res = new Tuple(tupleDesc);
-        res.setField(0,new IntField(count)); // 就算count是0，也要返回结果
+        res.setField(0,new IntField(count)); // !!!就算count是0，也要返回结果
         callTime++;
         return res;
     }

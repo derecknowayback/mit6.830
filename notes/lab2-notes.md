@@ -1,5 +1,3 @@
-6.5830/6.5831 Lab 2: SimpleDB Operators
-
 # Get Started
 
 在这个实验作业中，您将为SimpleDB编写一组操作符，以实现表修改(例如，插入和删除记录)、选择、连接和聚合。它们将建立在您在实验室1中编写的基础之上，为您提供一个可以对多个表执行简单查询的数据库系统。
@@ -35,7 +33,13 @@ Join: 该操作符根据作为构造函数一部分传入的JoinPredicate来连�
 
 实现下面这些类：
 
-> src/java/simpledb/execution/Predicate.java src/java/simpledb/execution/JoinPredicate.java src/java/simpledb/execution/Filter.java src/java/simpledb/execution/Join.java
+> src/java/simpledb/execution/Predicate.java 
+>
+> src/java/simpledb/execution/JoinPredicate.java 
+>
+> src/java/simpledb/execution/Filter.java 
+>
+> src/java/simpledb/execution/Join.java
 
 代码应该通过PredicateTest、JoinPredicateTest、FilterTest和JoinTest中的单元测试。此外，代码应该能够通过系统测试FilterTest和JoinTest。
 
@@ -813,7 +817,9 @@ Exercise 3.
 
 实现下面这些类：
 
-> src/java/simpledb/storage/HeapPage.java src/java/simpledb/storage/HeapFile.java 
+> src/java/simpledb/storage/HeapPage.java 
+>
+> src/java/simpledb/storage/HeapFile.java 
 >
 > (Note that you do not necessarily need to implement writePage() at this point).
 
@@ -833,6 +839,322 @@ Exercise 3.
 
 
 
+## HeapPage.java (version2)
+
+```java
+public class HeapPage implements Page {
+
+    final HeapPageId pid;
+    final TupleDesc td;
+    final byte[] header; // bitmap
+    final Tuple[] tuples; // 真正存储tuple的地方
+    final int numSlots; // 槽的容量
+    final List<Integer> tupleList; // 有效tuple的index集合
+    final List<Integer> unusedList; // 没有使用的Slot,作为缓存,高效获得unused slot
+
+    private boolean isDirty; // 这个字段其实没什么用, 真正有用的是 transactionId
+    private TransactionId transactionId; // 最后一次修改这个page的id;
+
+    byte[] oldData;
+    private final Byte oldDataLock = (byte) 0;
+
+
+    /**
+     * 用来创建一个新的empty-page,这个方法在对HeapFile追加一个新页的时候很有用
+     * @return The returned ByteArray.
+     */
+    public static byte[] createEmptyPageData() {
+        int len = BufferPool.getPageSize();
+        return new byte[len]; //all 0
+    }
+
+    /**
+     * 删除一个tuple
+     * @param t The tuple to delete
+     * @throws DbException if this tuple is not on this page, or tuple slot is
+     *                     already empty.
+     */
+    public void deleteTuple(Tuple t) throws DbException {
+        int index = t.getRecordId().getTupleNumber(); // 拿到页内位置
+        if(t.getRecordId().getPageId() != pid || !isSlotUsed(index)) // 判断是否有这个tuple
+            throw new DbException("Delete failed ...");
+        markSlotUsed(index,false); // 标记为free
+        tupleList.remove((Integer)index); // 从tupleList中移除
+        unused.add(index); // 添加到unusedList
+    }
+
+    /**
+     * 添加一个tuple
+     * @param t The tuple to add.
+     * @throws DbException if the page is full (no empty slots) or tupledesc
+     *                     is mismatch.
+     */
+    public void insertTuple(Tuple t) throws DbException {
+        // 检查是不是这个page的
+        if(getNumUnusedSlots() == 0 || !td.equals(t.getTupleDesc()))
+            throw new DbException("ERROR: HeapPage Insert failed ...");
+        int index = unusedList.remove(0); // pop出第一个元素
+        tuples[index] = t;
+        markSlotUsed(index,true); // 标记为已使用
+        tupleList.add(index); // tupleList 添加
+        t.setRecordId(new RecordId(pid,index)); // !!!不要忘记设置RecordId
+    }
+
+    /**
+     * Marks this page as dirty/not dirty and record that transaction
+     * that did the dirtying
+     */
+    public void markDirty(boolean dirty, TransactionId tid) {
+        this.isDirty = dirty;
+        // 不知道要不要判断, 防御性起见还是判断一下
+        if(dirty)
+            this.transactionId = tid;
+        else
+            this.transactionId = null;
+    }
+
+    /**
+     * Returns the tid of the transaction that last dirtied this page, or null if the page is not dirty
+     */
+    public TransactionId isDirty() {
+        return transactionId;
+    }
+
+    /**
+     * Returns the number of unused (i.e., empty) slots on this page.
+     */
+    public int getNumUnusedSlots() {
+        int res = 0, index = -1;
+        for (int i = 0; i < getNumTuples(); i++) {
+            if(i % 8 == 0) index++;
+            if(getBit(header[index], i % 8) == 0){
+                res++;
+                tupleList.remove((Integer) i); // 这里特地强转一下，不然会被识别为 "按索引移除"
+                unusedList.add(i); // 这里加一个缓存
+            }
+            else if (!tupleList.contains(i)){
+                tupleList.add(i);
+                unusedList.remove((Integer) i); // 这里特地强转一下，不然会被识别为 "按索引移除"
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Abstraction to fill or clear a slot on this page.
+     */
+    private void markSlotUsed(int i, boolean value) {
+        int bit = value ? 1 : 0, index = i / 8;
+        header[index] = setBit(header[index],i % 8,bit);
+    }
+}
+```
+
+这次特别加了一个unusedList，本质上也是为了加速获取到可用的空间，减少遍历的时间；
+
+
+
+## HeapFile.java (version2)
+
+```java
+public class HeapFile implements DbFile {
+
+    public File f;
+    private TupleDesc td;
+
+    // 因为一表一个HeapFile, 所以放心使用一个tableId表示一个Heapfile
+    private int tableId;
+
+
+    // 将指定的page写到磁盘上
+    public void writePage(Page page) throws IOException {
+        HeapPage heapPage = (HeapPage) page;
+        int offset = heapPage.getId().getPageNumber() * BufferPool.getPageSize();
+        try {
+            RandomAccessFile rw = new RandomAccessFile(f, "rw");
+            rw.seek(offset); // 记得seek
+            rw.write(heapPage.getPageData());
+        }catch (IOException e){
+            throw e;
+        }
+    }
+
+    /**
+     * Returns the number of pages in this HeapFile.
+     */
+    public int numPages() {
+        // 这个公式是没有错的;
+        return  (int) Math.floor(f.length() * 1.0 / BufferPool.getPageSize());
+    }
+
+    // 插入一个tuple,返回修改的页面
+    public List<Page> insertTuple(TransactionId tid, Tuple t)
+            throws DbException, IOException, TransactionAbortedException {
+        boolean insertSuccess = false; // 需要有一个flag来标志我们是否插入成功
+        List<Page> res = new ArrayList<>();
+        for (int i =0; i < numPages(); i ++) {
+            HeapPageId pageId = new HeapPageId(tableId, i);
+            HeapPage page = (HeapPage)Database.getBufferPool().getPage(tid, pageId, null);
+            int numUnusedSlots = page.getNumUnusedSlots();
+            if(numUnusedSlots != 0){
+                page.insertTuple(t);
+                // page.markDirty(true,tid); 这边暂时不要markDirty，交给buffer-pool
+                insertSuccess = true;
+                res.add(page); // 只返回这个修改的page
+                break;
+            }
+        }
+        // !!!如果没有页可以容纳，那么我们就添加一个新页
+        if(!insertSuccess){
+            try {
+                RandomAccessFile randomAccessFile = new RandomAccessFile(f,"rw");
+                // 开始创建一个新的page,准备写到磁盘上;
+                byte[] empty = HeapPage.createEmptyPageData();
+                HeapPage heapPage = new HeapPage(new HeapPageId(tableId, numPages()), empty);
+                heapPage.insertTuple(t);
+                randomAccessFile.seek(f.length()); // 记得seek
+                randomAccessFile.write(heapPage.getPageData());
+                res.add(heapPage); // 记得加到res中;
+            }catch (IOException e){
+                throw e;
+            }
+        }
+        return res;
+    }
+
+    // 删除一个tuple,返回修改的页面
+    public List<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
+            TransactionAbortedException {
+        List<Page> res = new ArrayList<>();
+        PageId pageId = t.getRecordId().getPageId();
+        HeapPage page = (HeapPage)Database.getBufferPool().getPage(tid, pageId, null);
+        page.deleteTuple(t);
+        // page.markDirty(true,tid); 这边暂时不要markDirty，交给buffer-pool
+        res.add(page);
+        return res;
+    }
+
+
+    // 这次HeapFileIterator也稍微改了一下
+    private class HeapFileIterator implements DbFileIterator{
+
+        private int pageCursor; // 标记我们遍历到哪一个page了;
+
+        private Iterator<Tuple> inPageCursor; // cursor "within" a page，在页内做索引
+
+        @Override
+        public void open() throws DbException, TransactionAbortedException {
+            pageCursor = 0;
+            HeapPage page = (HeapPage) Database.getBufferPool().getPage(null, new HeapPageId(tableId, 0), null);
+            inPageCursor = page.iterator();
+        }
+
+        private HeapPage prefetchPage() throws TransactionAbortedException, DbException {
+            if(pageCursor == numPages() - 1) return null;
+            return (HeapPage) Database.getBufferPool().getPage(null, new HeapPageId(tableId,pageCursor + 1), null);
+        }
+	}
+}
+```
+
+这个类花了我比较多的时间，原因是我没有看到下面这句话：
+
+> 添加元组: HeapFile.java中的insertTuple方法负责向堆文件添加元组。要向HeapFile中添加一个新的元组，您必须找到一个有空槽的页面。**<u>如果HeapFile中不存在这样的页，则需要创建一个新页并将其追加到磁盘上的物理文件。</u>**您需要确保正确更新了元组中的RecordID。
+
+因为没有看到这句话，我一开始不知道要新建一个page，所以numPages()的数量一直不对，怀疑自己是不是实现错了，其实没有：
+
+```java
+    public int numPages() {
+        // 这个公式是没有错的;
+        return  (int) Math.floor(f.length() * 1.0 / BufferPool.getPageSize());
+    }
+```
+
+`f.length()`返回了HeapFile文件的大小,公式是正确的；之所以numPages()一直错是因为我没有新建一个page。
+
+所以我在insertTuple中加了下面这段逻辑：
+
+```java
+ // !!!如果没有页可以容纳，那么我们就添加一个新页
+        if(!insertSuccess){
+            try {
+                RandomAccessFile randomAccessFile = new RandomAccessFile(f,"rw");
+                // 开始创建一个新的page,准备写到磁盘上;
+                byte[] empty = HeapPage.createEmptyPageData();
+                HeapPage heapPage = new HeapPage(new HeapPageId(tableId, numPages()), empty);
+                heapPage.insertTuple(t);
+                randomAccessFile.seek(f.length()); // 记得seek
+                randomAccessFile.write(heapPage.getPageData());
+                res.add(heapPage); // 记得加到res中;
+            }catch (IOException e){
+                throw e;
+            }
+        }
+```
+
+还有一个注意的点是，"**我们不需要在HeapFile层面markdirty，markdirty是Buffer-pool该做的事**"；
+
+
+
+
+
+## BufferPool insert&delete
+
+```java
+    /**
+     * Add a tuple to the specified table on behalf of transaction tid.  Will
+     * acquire a write lock on the page the tuple is added to and any other
+     * pages that are updated (Lock acquisition is not needed for lab2).
+     * May block if the lock(s) cannot be acquired.
+     * <p>
+     * Marks any pages that were dirtied by the operation as dirty by calling
+     * their markDirty bit, and adds versions of any pages that have
+     * been dirtied to the cache (replacing any existing versions of those pages) so
+     * that future requests see up-to-date pages.
+     *
+     * @param tid     the transaction adding the tuple
+     * @param tableId the table to add the tuple to
+     * @param t       the tuple to add
+     */
+    public void insertTuple(TransactionId tid, int tableId, Tuple t)
+            throws DbException, IOException, TransactionAbortedException {
+        List<Page> pages = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
+        for (Page page : pages) {
+            page.markDirty(true,tid); // 标记为脏页
+            PageId pageId = page.getId();
+            pageMap.put(pageId,page); // 更新缓存池中的page
+        }
+    }
+
+    /**
+     * Remove the specified tuple from the buffer pool.
+     * Will acquire a write lock on the page the tuple is removed from and any
+     * other pages that are updated. May block if the lock(s) cannot be acquired.
+     * <p>
+     * Marks any pages that were dirtied by the operation as dirty by calling
+     * their markDirty bit, and adds versions of any pages that have
+     * been dirtied to the cache (replacing any existing versions of those pages) so
+     * that future requests see up-to-date pages.
+     *
+     * @param tid the transaction deleting the tuple.
+     * @param t   the tuple to delete
+     */
+    public void deleteTuple(TransactionId tid, Tuple t)
+            throws DbException, IOException, TransactionAbortedException {
+        // 先拿到表id
+        int tableId = t.getRecordId().getPageId().getTableId();
+        // 再根据表id找到DBFile,通过Catalog
+        List<Page> pages = Database.getCatalog().getDatabaseFile(tableId).deleteTuple(tid,t);
+        for (Page page : pages) {
+            page.markDirty(true,tid); // 标记为脏页
+            PageId pageId = page.getId();
+            pageMap.put(pageId,page); // 更新缓存池中的page
+        }
+    }
+```
+
+**deleteTuple的时候我想了一会才明白怎么拿到DBFile，要先通过tuple的pageId拿到表id；**
+
 
 
 
@@ -845,7 +1167,7 @@ Exercise 3.
 
 > These operators return the number of affected tuples. This is implemented by returning a single tuple with one integer field, containing the count.
 
-Insert: 该操作符将从子操作符中读取的元组添加到构造函数中指定的tableid中。它应该使用BufferPool.insertTuple()方法来执行此操作。
+Insert:  该操作符将从子操作符中读取的元组添加到构造函数中指定的tableid中。它应该使用BufferPool.insertTuple()方法来执行此操作。
 
 Delete: 该操作符从构造函数中指定的tableid中从子操作符中读取的元组删除。它应该使用BufferPool.deleteTuple()方法来做到这一点。
 
@@ -855,9 +1177,117 @@ Exercise 4:
 
 在实现下面的类:
 
-> src/java/simpledb/execution/Insert.java src/java/simpledb/execution/Delete.java
+> src/java/simpledb/execution/Insert.java 
+>
+> src/java/simpledb/execution/Delete.java
 
 此时，代码应该通过InsertTest中的单元测试。我们没有为Delete提供单元测试。此外，您应该能够通过InsertTest和DeleteTest系统测试。
+
+
+
+
+
+## Insert.java
+
+```java
+public class Insert extends Operator {
+
+    private static final long serialVersionUID = 1L;
+
+    private TransactionId t;
+    private OpIterator child;
+    private int tableId;
+
+    private int callTime; // 用来记录 fetchNext调用了几次
+
+    private TupleDesc tupleDesc;
+ 
+   
+
+    /**
+     * Inserts tuples read from child into the tableId specified by the
+     * constructor. It returns a one field tuple containing the number of
+     * inserted records. Inserts should be passed through BufferPool. An
+     * instances of BufferPool is available via Database.getBufferPool(). Note
+     * that insert DOES NOT need check to see if a particular tuple is a
+     * duplicate before inserting it.
+     *
+     * @return A 1-field tuple containing the number of inserted records, or
+     *         null if called more than once.
+     * @see Database#getBufferPool
+     * @see BufferPool#insertTuple
+     */
+    protected Tuple fetchNext() throws TransactionAbortedException, DbException {
+        if (callTime != 0) return null;
+        Tuple res;
+        int count = 0;
+        while (child.hasNext()){
+            try {
+                Database.getBufferPool().insertTuple(t,tableId,child.next());
+                count++;
+            }catch (IOException e){
+                throw new TransactionAbortedException();
+            }
+        }
+        res = new Tuple(tupleDesc);
+        res.setField(0,new IntField(count)); // !!!就算count是0，也要返回结果
+        callTime++;
+        return res;
+    }
+}
+```
+
+**这里主要是fetchNext坑了一把，我没有考虑到 `count == 0`的时候（也就是一个插入也没有），也要返回一个结果 `count == 0`；**
+
+
+
+
+
+## Delete.java
+
+```java
+public class Delete extends Operator {
+
+    private static final long serialVersionUID = 1L;
+
+    private TransactionId t;
+    private OpIterator child;
+    private TupleDesc tupleDesc;
+
+    private int callTime;
+
+    /**
+     * Deletes tuples as they are read from the child operator. Deletes are
+     * processed via the buffer pool (which can be accessed via the
+     * Database.getBufferPool() method.
+     *
+     * @return A 1-field tuple containing the number of deleted records.
+     * @see Database#getBufferPool
+     * @see BufferPool#deleteTuple
+     */
+    protected Tuple fetchNext() throws TransactionAbortedException, DbException {
+        if(callTime != 0) return null;
+        Tuple res;
+        int count = 0;
+        while (child.hasNext()){
+            try {
+                Database.getBufferPool().deleteTuple(t,child.next());
+                count++;
+            }catch (IOException e){
+                throw new TransactionAbortedException();
+            }
+        }
+        res = new Tuple(tupleDesc);
+        res.setField(0,new IntField(count));
+        callTime ++;
+        return res;
+    }
+}
+```
+
+delete和insert差不多；
+
+
 
 
 
@@ -869,11 +1299,11 @@ Exercise 4:
 
 注意，BufferPool要求您实现一个flushAllPages()方法。这在缓冲池的实际实现中是不需要的。但是，出于测试目的，我们需要这种方法。永远不要从任何实际代码中调用此方法。
 
-因为我们实现ScanTest.cacheTest的方式，在中，您将需要确保flushPage()和flushAllPages()方法不会从缓冲池中清除页面以正确通过此测试。
+因为我们实现ScanTest.cacheTest的方式，在中，您将需要确保**flushPage()和flushAllPages()方法不会从缓冲池中清除页面**以正确通过此测试。
 
-flushAllPages()应该在缓冲池中的所有页上调用flushPage()，并且flushPage()**应该将任何脏页写入磁盘并将其标记为非脏页**，同时将其留在缓冲池中。
+flushAllPages()应该在缓冲池中的所有页上调用flushPage()，并且flushPage()**应该将任何脏页写入磁盘并将其标记为非脏页**，**<u>同时将其留在缓冲池中。</u>**
 
-应该从缓冲池中移除页面的唯一方法是evictPage()，它应该在它所清除的任何脏页面上调用flushPage()。
+应该从**缓冲池中移除页面的唯一方法是evictPage()，它应该在它所清除的任何脏页面上调用flushPage()**。
 
 Exercise 5.
 
@@ -883,13 +1313,136 @@ Exercise 5.
 
 此时，您的代码应该通过了EvictionTest系统测试。
 
-因为我们不会检查任何特定的驱除策略,这个测试是通过初始化缓冲池的大小为16页,扫描
+因为我们不会检查任何特定的驱除策略,这个测试是通过初始化缓冲池的大小为16页,扫描一个超过16页的文件,检查JVM的内存使用增加是否超过5 MB。如果你不正确执行驱除策略,你不会驱逐足够的页面,并将超过大小限制, 因此测试失败。
 
-一个超过16页的文件,检查JVM的内存使用增加是否超过5 MB。如果你不正确执行驱除策
+**重点：明白一件事，flushAllPages() 和 flushPage() 都只是写回到磁盘上，<u>但是不清除缓存！！！</u>**
 
-略,你不会驱逐足够的页面,并将超过大小限制, 因此测试失败。
+我选的策略是类似LRU的策略，根据访问量来选择，访问最少的被驱除；
 
-你现在已经完成了这个实验。干得好!
+```java
+public class BufferPool {
+    /**
+     * Bytes per page, including header.
+     */
+    private static final int DEFAULT_PAGE_SIZE = 4096;
+
+    private static int pageSize = DEFAULT_PAGE_SIZE;
+
+    /**
+     * Default number of pages passed to the constructor. This is used by
+     * other classes. BufferPool should use the numPages argument to the
+     * constructor instead.
+     */
+    public static final int DEFAULT_PAGES = 50;
+
+    private final int numPages; //  表示当前缓存池的容量
+
+    private HashMap<PageId,Page> pageMap; // 根据 PageId 和 Page 做映射
+    private HashMap<PageId,Integer> lruMap; // 保存page的访问次数
+
+
+    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
+            throws TransactionAbortedException, DbException {
+        Page page = pageMap.get(pid);
+        if(page != null)  {
+            lruMap.merge(pid,1,Integer::sum);
+            return page;
+        }
+        // 如果容量已满, 就要执行驱除
+        if(pageMap.size() == numPages){
+            evictPage();
+        }
+        page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+        pageMap.put(page.getId(), page);
+        lruMap.merge(pid,1,Integer::sum);
+        return page;
+    }
+
+
+    /**
+     * Flush all dirty pages to disk.
+     * NB: Be careful using this routine -- it writes dirty data to disk so will
+     * break simpledb if running in NO STEAL mode.
+     */
+    public synchronized void flushAllPages() throws IOException {
+        for (PageId id : pageMap.keySet()) {
+            Page page = pageMap.get(id);
+            // 如果是脏页，写会磁盘
+            if(page.isDirty() != null){
+                DbFile databaseFile = Database.getCatalog().getDatabaseFile(id.getTableId());
+                databaseFile.writePage(page);
+                page.markDirty(false,null);
+            }
+        }
+        // 不需要驱除缓存
+//        for (PageId id : toFlush) {
+//            pageMap.remove(id);
+//        }
+//        for (PageId id: toFlush){
+//            lruMap.remove(id);
+//        }
+    }
+
+    /**
+     * Remove the specific page id from the buffer pool.
+     * Needed by the recovery manager to ensure that the
+     * buffer pool doesn't keep a rolled back page in its
+     * cache.
+     */
+    public synchronized void removePage(PageId pid) {
+       pageMap.remove(pid);
+       lruMap.remove(pid);
+    }
+
+    /**
+     * Flushes a certain page to disk
+     * @param pid an ID indicating the page to flush
+     */
+    private synchronized void flushPage(PageId pid) throws IOException {
+        // 这个应该不需要管buffer-pool有没有吧,但是保险起见我还是判断了 page != null
+        Page page = pageMap.get(pid);
+        if(page != null){
+            Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
+            page.markDirty(false,null);
+        }
+        else
+            System.out.println("FLUSH PAGE ERROR: NO PAGE " + pid + " IN BUFFER POOL");
+    }
+
+
+    /**
+     * Discards a page from the buffer pool.
+     * Flushes the page to disk to ensure dirty pages are updated on disk.
+     */
+    private synchronized void evictPage() throws DbException {
+        PageId victim = null;
+        int min = Integer.MAX_VALUE;
+        // 找到最少访问的page
+        for (PageId id : lruMap.keySet()) {
+            if(victim == null){
+                victim = id;
+                min = lruMap.get(id);
+            }
+            else{
+                int temp = lruMap.get(id);
+                if(temp < min){
+                    victim = id;
+                    min = temp;
+                }
+            }
+        }
+        try {
+            flushPage(victim);
+            // 记得要驱除
+            lruMap.remove(victim);
+            pageMap.remove(victim);
+        }catch (IOException e){
+            throw new DbException("Evict error: failed to flush...");
+        }
+    }
+
+}
+```
 
 
 

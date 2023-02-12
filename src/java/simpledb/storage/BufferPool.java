@@ -41,7 +41,7 @@ public class BufferPool {
     private final int numPages; //  表示当前缓存池的容量
 
     private HashMap<PageId,Page> pageMap; // 根据 PageId 和 Page 做映射
-    private HashMap<PageId,Integer> lruMap;
+    private HashMap<PageId,Integer> lruMap; // 保存page的访问次数
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -164,9 +164,9 @@ public class BufferPool {
             throws DbException, IOException, TransactionAbortedException {
         List<Page> pages = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
         for (Page page : pages) {
-            page.markDirty(true,tid);
+            page.markDirty(true,tid); // 标记为脏页
             PageId pageId = page.getId();
-            pageMap.put(pageId,page);
+            pageMap.put(pageId,page); // 更新缓存池中的page
         }
     }
 
@@ -185,12 +185,14 @@ public class BufferPool {
      */
     public void deleteTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
+        // 先拿到表id
         int tableId = t.getRecordId().getPageId().getTableId();
+        // 再根据表id找到DBFile,通过Catalog
         List<Page> pages = Database.getCatalog().getDatabaseFile(tableId).deleteTuple(tid,t);
         for (Page page : pages) {
-            page.markDirty(true,tid);
+            page.markDirty(true,tid); // 标记为脏页
             PageId pageId = page.getId();
-            pageMap.put(pageId,page);
+            pageMap.put(pageId,page); // 更新缓存池中的page
         }
     }
 
@@ -238,7 +240,7 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
-        // 这个应该不需要管buffer-pool有没有吧
+        // 这个应该不需要管buffer-pool有没有吧,但是保险起见我还是判断了 page != null
         Page page = pageMap.get(pid);
         if(page != null){
             Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
@@ -263,6 +265,7 @@ public class BufferPool {
     private synchronized void evictPage() throws DbException {
         PageId victim = null;
         int min = Integer.MAX_VALUE;
+        // 找到最少访问的page
         for (PageId id : lruMap.keySet()) {
             if(victim == null){
                 victim = id;
@@ -278,6 +281,7 @@ public class BufferPool {
         }
         try {
             flushPage(victim);
+            // 记得要驱除
             lruMap.remove(victim);
             pageMap.remove(victim);
         }catch (IOException e){

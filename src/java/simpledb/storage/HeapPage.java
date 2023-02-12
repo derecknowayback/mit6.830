@@ -26,9 +26,9 @@ public class HeapPage implements Page {
     final Tuple[] tuples; // 真正存储tuple的地方
     final int numSlots; // 槽的容量
     final List<Integer> tupleList; // 有效tuple的index集合
-    final List<Integer> unusedList;
+    final List<Integer> unusedList; // 没有使用的Slot,作为缓存,高效获得unused slot
 
-    private boolean isDirty;
+    private boolean isDirty; // 这个字段其实没什么用, 真正有用的是 transactionId
     private TransactionId transactionId;
 
     byte[] oldData;
@@ -236,12 +236,7 @@ public class HeapPage implements Page {
     }
 
     /**
-     * Static method to generate a byte array corresponding to an empty
-     * HeapPage.
-     * Used to add new, empty pages to the file. Passing the results of
-     * this method to the HeapPage constructor will create a HeapPage with
-     * no valid tuples in it.
-     *
+     * 用来创建一个新的empty-page,这个方法在对HeapFile追加一个新页的时候很有用
      * @return The returned ByteArray.
      */
     public static byte[] createEmptyPageData() {
@@ -258,10 +253,12 @@ public class HeapPage implements Page {
      *                     already empty.
      */
     public void deleteTuple(Tuple t) throws DbException {
-        int index = t.getRecordId().getTupleNumber();
-        if(t.getRecordId().getPageId() != pid || !isSlotUsed(index))
+        int index = t.getRecordId().getTupleNumber(); // 拿到页内位置
+        if(t.getRecordId().getPageId() != pid || !isSlotUsed(index)) // 判断是否有这个tuple
             throw new DbException("Delete failed ...");
-        markSlotUsed(index,false);
+        markSlotUsed(index,false); // 标记为free
+        tupleList.remove((Integer)index); // 从tupleList中移除
+        unused.add(index); // 添加到unusedList
     }
 
     /**
@@ -273,12 +270,14 @@ public class HeapPage implements Page {
      *                     is mismatch.
      */
     public void insertTuple(Tuple t) throws DbException {
+        // 检查是不是这个page的
         if(getNumUnusedSlots() == 0 || !td.equals(t.getTupleDesc()))
             throw new DbException("ERROR: HeapPage Insert failed ...");
         int index = unusedList.remove(0); // pop出第一个元素
         tuples[index] = t;
-        markSlotUsed(index,true);
-        t.setRecordId(new RecordId(pid,index));
+        markSlotUsed(index,true); // 标记为已使用
+        tupleList.add(index);
+        t.setRecordId(new RecordId(pid,index)); // !!!不要忘记设置RecordId
     }
 
     /**
@@ -383,17 +382,5 @@ public class HeapPage implements Page {
         int mask = (bit ^ v) << n;
         return (byte) (mask ^ x);
     }
-
-    /* Flips the Nth bit in X. */
-    private byte flipBit(byte x, int n) {
-        /* YOUR CODE HERE */
-        int origin = getBit(x,n);
-        int flip = (~origin) & 1;
-        return setBit(x,n,flip);
-    }
-
-
-
-
 }
 

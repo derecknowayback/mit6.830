@@ -1,11 +1,12 @@
 package simpledb.optimizer;
 
+import javafx.util.Pair;
 import simpledb.common.Database;
+import simpledb.common.Type;
 import simpledb.execution.Predicate;
 import simpledb.storage.*;
 
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -71,6 +72,10 @@ public class TableStats {
      * @param ioCostPerPage The cost per page of IO. This doesn't differentiate between
      *                      sequential-scan IO and disk seeks.
      */
+
+    private List<Object> histograms;
+    private int ioCostPerPage;
+
     public TableStats(int tableid, int ioCostPerPage) {
         // For this function, you'll have to get the
         // DbFile for the table in question,
@@ -79,7 +84,85 @@ public class TableStats {
         // You should try to do this reasonably efficiently, but you don't
         // necessarily have to (for example) do everything
         // in a single scan of the table.
-        // TODO: some code goes here
+        DbFile file = Database.getCatalog().getDatabaseFile(tableid);
+        TupleDesc tupleDesc = file.getTupleDesc();
+        int numFields = tupleDesc.numFields(); // 说明我们要关注多少个字段
+        histograms = new ArrayList<>(numFields);
+        // 对于int我们要关心最大最小值, 对于string我们不需要关心最大最小值;
+        // 要先扫描一遍
+        DbFileIterator iterator = file.iterator(null);
+        HashMap<Integer, Pair<Integer, Integer>> intStaticsMap = null;
+        try {
+            intStaticsMap = getIntStaticsMap(iterator, numFields);
+        }catch (Exception e){
+            System.out.println("TableStats: " + e);
+            return;
+        }
+        // 现在要先创建直方图，再添加
+        // 创建
+        for (int i = 0; i < numFields; i++) {
+            if(tupleDesc.getFieldType(i) == Type.INT_TYPE){
+                Pair<Integer, Integer> pair = intStaticsMap.get(i);
+                histograms.add(new IntHistogram(NUM_HIST_BINS,pair.getKey(),pair.getValue()));
+            }else {
+                histograms.add(new StringHistogram(NUM_HIST_BINS));
+            }
+        }
+        // 添加数据
+        iterator = file.iterator(null);
+        try {
+            addStatics(iterator,numFields);
+        }catch (Exception e){
+            System.out.println("TableStats: " + e);
+            return;
+        }
+        this.ioCostPerPage = ioCostPerPage;
+    }
+
+
+    private HashMap<Integer, Pair<Integer,Integer>> getIntStaticsMap( DbFileIterator iterator,int numFields) throws Exception{
+        iterator.open();
+        // 定义 Pair的第一个值是 min，第二个是 max
+        HashMap<Integer, Pair<Integer,Integer>> res = new HashMap<>();
+        while (iterator.hasNext()){
+            Tuple next = iterator.next();
+            for (int i = 0; i < numFields; i++) {
+                // 拿到第 i 个字段
+                Field field = next.getField(i);
+                // 忽略 StringField
+                if (field instanceof IntField){
+                    IntField f = (IntField) field;
+                    int tempVal = f.getValue();
+                    Pair<Integer, Integer> pair = res.get(i);
+                    if(pair == null){
+                        pair = new Pair<>(tempVal, tempVal);
+                    }else{
+                        int min = Math.min(pair.getKey(),tempVal), max = Math.max(pair.getValue(),tempVal);
+                        pair = new Pair<>(min,max);
+                    }
+                    res.put(i,pair);
+                }
+            }
+        }
+        iterator.close();
+        return res;
+    }
+
+
+    private void addStatics(DbFileIterator iterator, int numFields) throws Exception{
+        while (iterator.hasNext()){
+            Tuple next = iterator.next();
+            for (int i = 0; i < numFields; i++) {
+                Field field = next.getField(i);
+                if (field instanceof IntField){
+                    IntHistogram intHistogram = (IntHistogram)histograms.get(i);
+                    intHistogram.addValue(((IntField)field).getValue());
+                }else{
+                    StringHistogram stringHistogram = (StringHistogram) histograms.get(i);
+                    stringHistogram.addValue(((StringField)field).getValue());
+                }
+            }
+        }
     }
 
     /**
