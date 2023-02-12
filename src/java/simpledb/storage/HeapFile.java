@@ -24,13 +24,12 @@ import java.util.NoSuchElementException;
  */
 public class HeapFile implements DbFile {
 
-    private File f;
+    public File f;
     private TupleDesc td;
-
-
 
     // 因为一表一个HeapFile, 所以放心使用一个tableId表示一个Heapfile
     private int tableId;
+
 
     /**
      * Constructs a heap file backed by the specified file.
@@ -97,31 +96,69 @@ public class HeapFile implements DbFile {
 
     // see DbFile.java for javadocs
     public void writePage(Page page) throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        HeapPage heapPage = (HeapPage) page;
+        int offset = heapPage.getId().getPageNumber() * BufferPool.getPageSize();
+        try {
+            RandomAccessFile rw = new RandomAccessFile(f, "rw");
+            rw.seek(offset);
+            rw.write(heapPage.getPageData());
+        }catch (IOException e){
+            throw e;
+        }
     }
 
     /**
      * Returns the number of pages in this HeapFile.
      */
     public int numPages() {
-        return (int) Math.floor(f.length() * 1.0 / BufferPool.getPageSize());
+        return  (int) Math.floor(f.length() * 1.0 / BufferPool.getPageSize());
     }
 
     // see DbFile.java for javadocs
     public List<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        return null;
-        // not necessary for lab1
+        boolean insertSuccess = false;
+        List<Page> res = new ArrayList<>();
+        for (int i =0; i < numPages(); i ++) {
+            HeapPageId pageId = new HeapPageId(tableId, i);
+            HeapPage page = (HeapPage)Database.getBufferPool().getPage(tid, pageId, null);
+            int numUnusedSlots = page.getNumUnusedSlots();
+//            System.out.println(numUnusedSlots);
+            if(numUnusedSlots != 0){
+                page.insertTuple(t);
+                // page.markDirty(true,tid); 这边暂时不要markDirty，交给buffer-pool
+                insertSuccess = true;
+                res.add(page); // 只返回这个修改的page
+                break;
+            }
+        }
+        // 如果没有页可以容纳，那么我们就添加一个新页
+        if(!insertSuccess){
+            try {
+                RandomAccessFile randomAccessFile = new RandomAccessFile(f,"rw");
+                byte[] empty = new byte[BufferPool.getPageSize()];
+                HeapPage heapPage = new HeapPage(new HeapPageId(tableId, numPages()), empty);
+                heapPage.insertTuple(t);
+                randomAccessFile.seek(f.length());
+                randomAccessFile.write(heapPage.getPageData());
+                res.add(heapPage);
+            }catch (IOException e){
+                throw e;
+            }
+        }
+        return res;
     }
 
     // see DbFile.java for javadocs
     public List<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
-        // TODO: some code goes here
-        return null;
-        // not necessary for lab1
+        List<Page> res = new ArrayList<>();
+        PageId pageId = t.getRecordId().getPageId();
+        HeapPage page = (HeapPage)Database.getBufferPool().getPage(tid, pageId, null);
+        page.deleteTuple(t);
+        // page.markDirty(true,tid); 这边暂时不要markDirty，交给buffer-pool
+        res.add(page);
+        return res;
     }
 
     // see DbFile.java for javadocs
@@ -137,38 +174,33 @@ public class HeapFile implements DbFile {
 
         private Iterator<Tuple> inPageCursor; // cursor "within" a page，在页内做索引
 
-        private List<HeapPage> pageList; // 在 pageList
 
 
         @Override
         public void open() throws DbException, TransactionAbortedException {
-            pageList = new ArrayList<>();
             pageCursor = 0;
             HeapPage page = (HeapPage) Database.getBufferPool().getPage(null, new HeapPageId(tableId, 0), null);
-            pageList.add(page);
             inPageCursor = page.iterator();
         }
 
         private HeapPage prefetchPage() throws TransactionAbortedException, DbException {
-            HeapPage nxtPage;
-            if(pageCursor == pageList.size() - 1 )
-                nxtPage = (HeapPage) Database.getBufferPool().getPage(null, new HeapPageId(tableId, pageList.size()), null);
-            else
-                nxtPage = pageList.get(pageCursor + 1);
-            pageList.add(nxtPage);
-            return nxtPage;
+            if(pageCursor == numPages() - 1) return null;
+            return (HeapPage) Database.getBufferPool().getPage(null, new HeapPageId(tableId,pageCursor + 1), null);
         }
 
         @Override
         public boolean hasNext() throws DbException, TransactionAbortedException {
-            if(pageCursor == numPages() || pageList == null || pageList.isEmpty()) return false;
+            if(pageCursor == numPages() || inPageCursor == null ) return false;
             if(inPageCursor.hasNext()) return true; // 如果正确的话，那直接返回；
             if(pageCursor == numPages() - 1) return false; // 如果已经是最后一页，而且上一个if不正确，那直接返回false；
-            // 到了这里说明：当前页不是最后一页且当前页已经没有tuple了，检查下一页：
-            HeapPage nxtPage = prefetchPage();
-            pageCursor ++; // 更新pageCursor，防止next()调用出错；
-            inPageCursor = nxtPage.iterator(); // 这边要及时更新两个Cursor,不然next()会出错
-            return inPageCursor.hasNext();
+            // 到了这里说明：当前页不是最后一页且当前页已经没有tuple了，不断检查下一页：
+            while (true){
+                HeapPage nxtPage = prefetchPage();
+                if(nxtPage == null) return false;
+                pageCursor ++; // 更新pageCursor，防止next()调用出错；
+                inPageCursor = nxtPage.iterator(); // 这边要及时更新两个Cursor,不然next()会出错
+                if(inPageCursor.hasNext()) return true;
+            }
         }
 
         @Override
@@ -186,12 +218,12 @@ public class HeapFile implements DbFile {
         @Override
         public void rewind() throws DbException, TransactionAbortedException {
             pageCursor = 0;
-            inPageCursor = pageList.get(pageCursor).iterator();
+            inPageCursor = ((HeapPage) Database.getBufferPool().getPage(null, new HeapPageId(tableId, 0), null)).iterator();
         }
 
         @Override
         public void close() {
-            pageList.clear();
+            inPageCursor = null;
         }
     }
 

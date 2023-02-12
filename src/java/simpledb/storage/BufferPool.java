@@ -9,9 +9,8 @@ import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.io.RandomAccessFile;
+import java.util.*;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -41,10 +40,8 @@ public class BufferPool {
 
     private final int numPages; //  表示当前缓存池的容量
 
-    private int requestForPage; // 请求 计数器，表示当前收到了多少 "不同" 页的请求
-
     private HashMap<PageId,Page> pageMap; // 根据 PageId 和 Page 做映射
-
+    private HashMap<PageId,Integer> lruMap;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -54,7 +51,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         this.numPages = numPages;
         this.pageMap = new HashMap<>();
-        this.requestForPage = 0;
+        this.lruMap = new HashMap<>();
     }
 
     public static int getPageSize() {
@@ -89,13 +86,17 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         Page page = pageMap.get(pid);
-        if(page != null)  return page;
-        requestForPage++;
-        if(requestForPage > numPages){
-            throw new DbException("Lab1: Too much Request for Buffer Pool");
+        if(page != null)  {
+            lruMap.merge(pid,1,Integer::sum);
+            return page;
+        }
+        // 如果容量已满, 就要执行驱除
+        if(pageMap.size() == numPages){
+            evictPage();
         }
         page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
         pageMap.put(page.getId(), page);
+        lruMap.merge(pid,1,Integer::sum);
         return page;
     }
 
@@ -161,8 +162,12 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        List<Page> pages = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
+        for (Page page : pages) {
+            page.markDirty(true,tid);
+            PageId pageId = page.getId();
+            pageMap.put(pageId,page);
+        }
     }
 
     /**
@@ -180,8 +185,13 @@ public class BufferPool {
      */
     public void deleteTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        int tableId = t.getRecordId().getPageId().getTableId();
+        List<Page> pages = Database.getCatalog().getDatabaseFile(tableId).deleteTuple(tid,t);
+        for (Page page : pages) {
+            page.markDirty(true,tid);
+            PageId pageId = page.getId();
+            pageMap.put(pageId,page);
+        }
     }
 
     /**
@@ -190,9 +200,22 @@ public class BufferPool {
      * break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1
-
+        for (PageId id : pageMap.keySet()) {
+            Page page = pageMap.get(id);
+            // 如果是脏页，写会磁盘
+            if(page.isDirty() != null){
+                DbFile databaseFile = Database.getCatalog().getDatabaseFile(id.getTableId());
+                databaseFile.writePage(page);
+                page.markDirty(false,null);
+            }
+        }
+        // 不需要驱除
+//        for (PageId id : toFlush) {
+//            pageMap.remove(id);
+//        }
+//        for (PageId id: toFlush){
+//            lruMap.remove(id);
+//        }
     }
 
     /**
@@ -205,8 +228,8 @@ public class BufferPool {
      * are removed from the cache so they can be reused safely
      */
     public synchronized void removePage(PageId pid) {
-        // TODO: some code goes here
-        // not necessary for lab1
+       pageMap.remove(pid);
+       lruMap.remove(pid);
     }
 
     /**
@@ -215,8 +238,14 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized void flushPage(PageId pid) throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        // 这个应该不需要管buffer-pool有没有吧
+        Page page = pageMap.get(pid);
+        if(page != null){
+            Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
+            page.markDirty(false,null);
+        }
+        else
+            System.out.println("FLUSH PAGE ERROR: NO PAGE " + pid + " IN BUFFER POOL");
     }
 
     /**
@@ -232,8 +261,28 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized void evictPage() throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        PageId victim = null;
+        int min = Integer.MAX_VALUE;
+        for (PageId id : lruMap.keySet()) {
+            if(victim == null){
+                victim = id;
+                min = lruMap.get(id);
+            }
+            else{
+                int temp = lruMap.get(id);
+                if(temp < min){
+                    victim = id;
+                    min = temp;
+                }
+            }
+        }
+        try {
+            flushPage(victim);
+            lruMap.remove(victim);
+            pageMap.remove(victim);
+        }catch (IOException e){
+            throw new DbException("Evict error: failed to flush...");
+        }
     }
 
 }

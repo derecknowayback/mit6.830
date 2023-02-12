@@ -26,7 +26,10 @@ public class HeapPage implements Page {
     final Tuple[] tuples; // 真正存储tuple的地方
     final int numSlots; // 槽的容量
     final List<Integer> tupleList; // 有效tuple的index集合
+    final List<Integer> unusedList;
 
+    private boolean isDirty;
+    private TransactionId transactionId;
 
     byte[] oldData;
     private final Byte oldDataLock = (byte) 0;
@@ -53,6 +56,8 @@ public class HeapPage implements Page {
         this.td = Database.getCatalog().getTupleDesc(id.getTableId());
         this.numSlots = getNumTuples();
         this.tupleList = new ArrayList<>();
+        this.unusedList = new ArrayList<>();
+        this.isDirty = false;
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
@@ -253,8 +258,10 @@ public class HeapPage implements Page {
      *                     already empty.
      */
     public void deleteTuple(Tuple t) throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        int index = t.getRecordId().getTupleNumber();
+        if(t.getRecordId().getPageId() != pid || !isSlotUsed(index))
+            throw new DbException("Delete failed ...");
+        markSlotUsed(index,false);
     }
 
     /**
@@ -266,8 +273,12 @@ public class HeapPage implements Page {
      *                     is mismatch.
      */
     public void insertTuple(Tuple t) throws DbException {
-        // TODO: some code goes here
-        // not necessary for lab1
+        if(getNumUnusedSlots() == 0 || !td.equals(t.getTupleDesc()))
+            throw new DbException("ERROR: HeapPage Insert failed ...");
+        int index = unusedList.remove(0); // pop出第一个元素
+        tuples[index] = t;
+        markSlotUsed(index,true);
+        t.setRecordId(new RecordId(pid,index));
     }
 
     /**
@@ -275,17 +286,19 @@ public class HeapPage implements Page {
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
-        // TODO: some code goes here
-        // not necessary for lab1
+        this.isDirty = dirty;
+        // 不知道要不要判断, 防御性起见还是判断一下
+        if(dirty)
+            this.transactionId = tid;
+        else
+            this.transactionId = null;
     }
 
     /**
      * Returns the tid of the transaction that last dirtied this page, or null if the page is not dirty
      */
     public TransactionId isDirty() {
-        // TODO: some code goes here
-        // Not necessary for lab1
-        return null;      
+        return transactionId;
     }
 
     /**
@@ -295,10 +308,14 @@ public class HeapPage implements Page {
         int res = 0, index = -1;
         for (int i = 0; i < getNumTuples(); i++) {
             if(i % 8 == 0) index++;
-            if(getBit(header[index], i % 8) == 0)
+            if(getBit(header[index], i % 8) == 0){
                 res++;
+                tupleList.remove((Integer) i); // 这里特地强转一下，不然会被识别为 "按索引移除"
+                unusedList.add(i); // 这里加一个缓存
+            }
             else if (!tupleList.contains(i)){
                 tupleList.add(i);
+                unusedList.remove((Integer) i); // 这里特地强转一下，不然会被识别为 "按索引移除"
             }
         }
         return res;
@@ -316,8 +333,8 @@ public class HeapPage implements Page {
      * Abstraction to fill or clear a slot on this page.
      */
     private void markSlotUsed(int i, boolean value) {
-        // TODO: some code goes here
-        // not necessary for lab1
+        int bit = value ? 1 : 0, index = i / 8;
+        header[index] = setBit(header[index],i % 8,bit);
     }
 
     // 自建类，用于迭代页面上的所有tuple

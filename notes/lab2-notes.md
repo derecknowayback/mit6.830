@@ -796,3 +796,102 @@ public class Aggregate extends Operator {
 还有下面这个注释，不能按注释这样改aggField的name，不能修改column-name，按照注释做反而会出错：
 
 > The name of an aggregate column should be informative. For example: "aggName(aop) (child_td.getFieldName(afield))" where aop and afield are given in the constructor, and child_td is the TupleDesc of the child iterator.
+
+
+
+
+
+# HeapFile Mutability
+
+现在，我们将开始实现支持修改表的方法。我们从单个页面和文件级别开始。主要有两组操作: 添加元组和删除元组。
+
+删除元组: 要删除一个元组，你需要实现deleteTuple。元组包含recordid，它允许您找到它们所在的页面，因此这应该像定位元组所属的页面并适当修改页面的header一样简单。
+
+添加元组: HeapFile.java中的insertTuple方法负责向堆文件添加元组。要向HeapFile中添加一个新的元组，您必须找到一个有空槽的页面。**<u>如果HeapFile中不存在这样的页，则需要创建一个新页并将其追加到磁盘上的物理文件。</u>**您需要确保正确更新了元组中的RecordID。
+
+Exercise 3.
+
+实现下面这些类：
+
+> src/java/simpledb/storage/HeapPage.java src/java/simpledb/storage/HeapFile.java 
+>
+> (Note that you do not necessarily need to implement writePage() at this point).
+
+要实现HeapPage，需要修改insertTuple()和deleteTuple()等方法的header-bitmap。您可能会发现，我们要求您在实验1中实现的getNumUnusedSlots()和isSlotUsed()方法充当了有用的抽象。注意，这里提供了一个markSlotUsed()方法作为抽象来修改header中槽的"Used"或"Clear"状态。
+
+注意，`HeapFile.insertTuple()`和`HeapFile.deleteTuple()`方法使用`BufferPool.getPage()`方法访问页面是很重要的; 否则，您在下一个实验中实现的事务将不能正常工作。
+
+在src/simpledb/BufferPool.java中实现以下框架方法:
+
+> - insertTuple() 
+>
+> - deleteTuple()
+
+这些方法应该调用HeapFile中属于被修改表的适当方法(将来需要这种额外的间接层来支持其他类型的文件——比如索引)。
+
+代码应该通过 HeapPageWriteTest 和 HeapFileWriteTest 以及BufferPoolWriteTest中的单元测试。
+
+
+
+
+
+
+
+# Insertion and deletion
+
+现在您已经编写了用于添加和删除元组的所有HeapFile机制，接下来将实现Insert和Delete操作符。
+
+对于实现插入和删除查询的计划，最上面的操作符是用于修改页面的特殊插入或删除操作符。这些操作符返回受影响元组的数目。这是通过返回一个包含计数的整数字段的tuple来实现的。
+
+> These operators return the number of affected tuples. This is implemented by returning a single tuple with one integer field, containing the count.
+
+Insert: 该操作符将从子操作符中读取的元组添加到构造函数中指定的tableid中。它应该使用BufferPool.insertTuple()方法来执行此操作。
+
+Delete: 该操作符从构造函数中指定的tableid中从子操作符中读取的元组删除。它应该使用BufferPool.deleteTuple()方法来做到这一点。
+
+
+
+Exercise 4:
+
+在实现下面的类:
+
+> src/java/simpledb/execution/Insert.java src/java/simpledb/execution/Delete.java
+
+此时，代码应该通过InsertTest中的单元测试。我们没有为Delete提供单元测试。此外，您应该能够通过InsertTest和DeleteTest系统测试。
+
+
+
+# Page eviction
+
+在实验1中，我们没有正确地观察到构造函数参数numPages定义的缓冲池中最大页面数量的限制。现在，您将选择一个页面移除策略，并使用之前读取或创建页面的任何代码来实现您的策略。
+
+当缓冲池中有超过numPages的页面时，应该在加载下一个页面之前从池中删除一个页面。你可自行选择驱逐政策;没有必要做一些复杂的事情。在实验报告中描述你的政策。
+
+注意，BufferPool要求您实现一个flushAllPages()方法。这在缓冲池的实际实现中是不需要的。但是，出于测试目的，我们需要这种方法。永远不要从任何实际代码中调用此方法。
+
+因为我们实现ScanTest.cacheTest的方式，在中，您将需要确保flushPage()和flushAllPages()方法不会从缓冲池中清除页面以正确通过此测试。
+
+flushAllPages()应该在缓冲池中的所有页上调用flushPage()，并且flushPage()**应该将任何脏页写入磁盘并将其标记为非脏页**，同时将其留在缓冲池中。
+
+应该从缓冲池中移除页面的唯一方法是evictPage()，它应该在它所清除的任何脏页面上调用flushPage()。
+
+Exercise 5.
+
+> src/java/simpledb/storage/BufferPool.java
+
+如果你没有在上面的HeapFile.java中实现writePage()，你也需要在这里实现。最后，还应该实现removePage()从缓冲池中删除页面，而不将其刷新到磁盘。我们不会在这个实验室中测试removePage()，但是在将来的实验室中这是必要的。
+
+此时，您的代码应该通过了EvictionTest系统测试。
+
+因为我们不会检查任何特定的驱除策略,这个测试是通过初始化缓冲池的大小为16页,扫描
+
+一个超过16页的文件,检查JVM的内存使用增加是否超过5 MB。如果你不正确执行驱除策
+
+略,你不会驱逐足够的页面,并将超过大小限制, 因此测试失败。
+
+你现在已经完成了这个实验。干得好!
+
+
+
+
+
