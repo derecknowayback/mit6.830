@@ -57,7 +57,6 @@ public class TupleDesc implements Serializable {
      * that are included in this TupleDesc
      */
     public Iterator<TDItem> iterator() {
-        if (typeList == null) return null; // 习惯检查, 其实没有必要
         return typeList.iterator();
     }
 
@@ -73,20 +72,11 @@ public class TupleDesc implements Serializable {
      *                be null.
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
-        int len;
-        // check length
-        if (typeAr == null || (len = typeAr.length) == 0) {
-            System.out.println("LENGTH ERROR: Create TupleDesc Failed ...");
-            return;
-        }
-        boolean hasName = fieldAr != null;
+        int len = typeAr.length;
         // 创建 typeList
         this.typeList = new ArrayList<>();
         for (int i = 0; i < len; i++) {
-            if(hasName)
-                typeList.add(new TDItem(typeAr[i], fieldAr[i]));
-            else
-                typeList.add(new TDItem(typeAr[i], null));
+            typeList.add(new TDItem(typeAr[i], fieldAr[i]));
         }
     }
 
@@ -98,11 +88,15 @@ public class TupleDesc implements Serializable {
      *               TupleDesc. It must contain at least one entry.
      */
     public TupleDesc(Type[] typeAr) {
-        this(typeAr,null); // 直接调用上一个构造函数;
+        this(typeAr,new String[typeAr.length]); // 直接调用上一个构造函数;
     }
 
     public TupleDesc() {
         this.typeList = new ArrayList<>();
+    }
+
+    public TupleDesc(List<TDItem> list){
+        this.typeList = list;
     }
 
 
@@ -110,7 +104,6 @@ public class TupleDesc implements Serializable {
      * @return the number of fields in this TupleDesc
      */
     public int numFields() {
-        if (typeList == null) return -1;
         return typeList.size();
     }
 
@@ -170,8 +163,7 @@ public class TupleDesc implements Serializable {
      * Note that tuples from a given TupleDesc are of a fixed size.
      */
     public int getSize() {
-        int len, res = 0;
-        if (typeList == null || (len = typeList.size()) == 0) return 0;
+        int len = typeList.size(), res = 0;
         for (int i = 0; i < len; i++) {
             res += typeList.get(i).fieldType.getLen();
         }
@@ -197,15 +189,11 @@ public class TupleDesc implements Serializable {
      * @return the new TupleDesc
      */
     public static TupleDesc merge(TupleDesc td1, TupleDesc td2) {
-        if (td1 == null || td2 == null) return null;
-        TupleDesc res = new TupleDesc();
-        for (int i = 0; i < td1.numFields(); i++) {
-            res.typeList.add(td1.getItem(i));
-        }
-        for (int i = 0; i < td2.numFields(); i++) {
-            res.typeList.add(td2.getItem(i));
-        }
-        return res;
+        List<TDItem> tupleDescList1 = td1.typeList;
+        List<TDItem> tupleDescList2 = td2.typeList;
+        List<TDItem> res = new ArrayList<>(tupleDescList1);
+        res.addAll(tupleDescList2);
+        return new TupleDesc(res);
     }
 
     /**

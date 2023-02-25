@@ -98,7 +98,9 @@ public class IntegerAggregator implements Aggregator {
 
     // 新发现的lambda型api，merge的写法很优雅
     private void doMax(Field f, int value) {
-        aggResult.merge(f, value, Math::max);
+        Integer integer = aggResult.get(f);
+        if (integer == null) aggResult.put(f,value);
+        else aggResult.put(f, Math.max(value,integer));
     }
 
     private void doCount(Field f) {
@@ -106,7 +108,9 @@ public class IntegerAggregator implements Aggregator {
     }
 
     private void doSum(Field f, int value) {
-        aggResult.merge(f,value, Integer::sum);
+        Integer integer = aggResult.get(f);
+        if (integer == null) aggResult.put(f,value);
+        else aggResult.put(f, Integer.sum(value,integer));
     }
 
     // avg是最麻烦的，需要我们保存所有的数据，重新遍历再求结果 ;
@@ -119,11 +123,13 @@ public class IntegerAggregator implements Aggregator {
             sum += k;
         }
         avg = sum / integers.size();
-        aggResult.merge(f,avg,(a,b) ->avg);
+        aggResult.put(f,avg);
     }
 
     private void doMin(Field f,int value) {
-        aggResult.merge(f, value, Math::min);
+        Integer integer = aggResult.get(f);
+        if (integer == null) aggResult.put(f,value);
+        else aggResult.put(f, Math.min(value,integer));
     }
 
 

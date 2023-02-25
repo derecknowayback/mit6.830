@@ -127,7 +127,7 @@ public class IntHistogram {
      *         implement a more efficient optimization
      */
     public double avgSelectivity() {
-        System.out.println("avgSelectivity: START!!!");
+        System.out.println("avgSelectivity: START!!! ->  " + ntup * 1.0 / (max - min + 1));
         return ntup * 1.0 / (max - min + 1);
     }
 

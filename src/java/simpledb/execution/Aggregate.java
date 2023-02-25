@@ -111,7 +111,6 @@ public class Aggregate extends Operator {
             TransactionAbortedException {
         super.open();
         child.open(); // 一定要先open子节点才可以hasNext
-        int average = 0, count = 0, sum = 0;
         // 这个时候子节点已经做完了所有工作了，我们要拿到子节点的所有tuple;
         while (child.hasNext()){
             Tuple next = child.next();

@@ -6,5 +6,5 @@ package simpledb.common;
  * represent the two levels of permission.
  */
 public enum Permissions {
-    READ_ONLY, READ_WRITE;
+    READ_ONLY, READ_WRITE
 }

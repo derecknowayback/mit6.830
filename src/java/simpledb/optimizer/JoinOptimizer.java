@@ -3,6 +3,7 @@ package simpledb.optimizer;
 import simpledb.ParsingException;
 import simpledb.common.Database;
 import simpledb.execution.*;
+import simpledb.storage.TupleDesc;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -100,11 +101,8 @@ public class JoinOptimizer {
             // You do not need to implement proper support for these for Lab 3.
             return card1 + cost1 + cost2;
         } else {
-            // Insert your code here.
-            // HINT: You may need to use the variable "j" if you implemented
-            // a join algorithm that's more complicated than a basic
-            // nested-loops join.
-            return -1.0;
+            double compareCost = card1 * card2, ioCost = cost1 + card1 * cost2;
+            return compareCost + ioCost;
         }
     }
 
@@ -143,9 +141,17 @@ public class JoinOptimizer {
                                                    boolean t2pkey, Map<String, TableStats> stats,
                                                    Map<String, Integer> tableAliasToId) {
         int card = 1;
-        // TODO: some code goes here
-        return card <= 0 ? 1 : card;
+        if(joinOp == Predicate.Op.EQUALS){
+            if(t1pkey || t2pkey){
+                return (t1pkey && t2pkey) ? Math.min(card2, card1) : t1pkey ? card2 : card1 ;
+            }else{
+                return Math.max(card1,card2);
+            }
+        }
+        return (int) (card1 * card2 * 0.3);
     }
+
+
 
     /**
      * Helper method to enumerate all of the subsets of a given size of a
@@ -157,24 +163,38 @@ public class JoinOptimizer {
      */
     public <T> Set<Set<T>> enumerateSubsets(List<T> v, int size) {
         Set<Set<T>> els = new HashSet<>();
-        els.add(new HashSet<>());
-        // Iterator<Set> it;
-        // long start = System.currentTimeMillis();
-
-        for (int i = 0; i < size; i++) {
-            Set<Set<T>> newels = new HashSet<>();
-            for (Set<T> s : els) {
-                for (T t : v) {
-                    Set<T> news = new HashSet<>(s);
-                    if (news.add(t))
-                        newels.add(news);
-                }
-            }
-            els = newels;
-        }
-
+        Set<T> ts = new HashSet<>();
+        dfs(v,size,0,ts,els);
+//        els.add(new HashSet<>());
+//
+//        for (int i = 0; i < size; i++) {
+//            Set<Set<T>> newels = new HashSet<>();
+//            for (Set<T> s : els) {
+//                for (T t : v) {
+//                    Set<T> news = new HashSet<>(s);
+//                    if (news.add(t))
+//                        newels.add(news);
+//                }
+//            }
+//            els = newels;
+//        }
         return els;
+    }
 
+    private <T> void dfs(List<T> v, int size, int cur, Set<T> temp, Set<Set<T>> res){
+        // 先处理 temp.size()
+        if(temp.size() == size){
+            res.add(new HashSet<>(temp));
+            return;
+        }
+        // 如果已经到了最后了 或者 剩下的元素全部一起上都凑不齐 size个元素
+        //  v.size() - cur 剩下的元素  size - temp.size() 还需要的元素
+        if(cur == v.size() || size - temp.size() > v.size() - cur) return;
+        T t = v.get(cur);
+        temp.add(t);
+        dfs(v,size,cur+1,temp,res);
+        temp.remove(t);
+        dfs(v,size,cur + 1,temp,res);
     }
 
     /**
@@ -197,10 +217,31 @@ public class JoinOptimizer {
             Map<String, TableStats> stats,
             Map<String, Double> filterSelectivities, boolean explain)
             throws ParsingException {
-        // Not necessary for labs 1 and 2.
-
-        // TODO: some code goes here
-        return joins;
+        int j = joins.size();
+        PlanCache pc= new PlanCache();
+        for (int i = 1; i <= j; i++) {
+            Set<Set<LogicalJoinNode>> sets = enumerateSubsets(joins, i);
+            for (Set<LogicalJoinNode> s : sets) {
+                CostCard bestPlan = null;
+                double bestCostSoFar = Double.MAX_VALUE;
+                for (LogicalJoinNode joinToRemove:s) {
+                    CostCard costCard = computeCostAndCardOfSubplan(stats, filterSelectivities, joinToRemove, s, bestCostSoFar, pc);
+                    if (costCard == null) continue;
+                    else{
+                        if(costCard.cost < bestCostSoFar){
+                            bestCostSoFar = costCard.cost;
+                            bestPlan = costCard;
+                        }
+                    }
+                }
+                if (bestPlan != null)
+                    pc.addPlan(s,bestPlan.cost, bestPlan.card,bestPlan.plan);
+            }
+        }
+        List<LogicalJoinNode> order = pc.getOrder(new HashSet<>(joins));
+        if(explain)
+            printJoins(order,pc,stats,filterSelectivities);
+        return order;
     }
 
     // ===================== Private Methods =================================

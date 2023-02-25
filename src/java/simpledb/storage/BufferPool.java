@@ -1,16 +1,18 @@
 package simpledb.storage;
 
+
 import simpledb.common.Catalog;
 import simpledb.common.Database;
 import simpledb.common.DbException;
 import simpledb.common.Permissions;
-import simpledb.execution.SeqScan;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
+import simpledb.transaction.TxLockManager;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -36,12 +38,13 @@ public class BufferPool {
      * other classes. BufferPool should use the numPages argument to the
      * constructor instead.
      */
-    public static final int DEFAULT_PAGES = 50;
+    public static final int DEFAULT_PAGES = 500;
 
     private final int numPages; //  表示当前缓存池的容量
 
-    private HashMap<PageId,Page> pageMap; // 根据 PageId 和 Page 做映射
-    private HashMap<PageId,Integer> lruMap; // 保存page的访问次数
+    private ConcurrentHashMap<PageId,Page> pageMap; // 根据 PageId 和 Page 做映射
+    private ConcurrentHashMap<PageId,Integer> lruMap; // 保存page的访问次数
+    public TxLockManager txLockManager;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -50,8 +53,9 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         this.numPages = numPages;
-        this.pageMap = new HashMap<>();
-        this.lruMap = new HashMap<>();
+        this.pageMap = new ConcurrentHashMap<>();
+        this.lruMap = new ConcurrentHashMap<>();
+        this.txLockManager = new TxLockManager();
     }
 
     public static int getPageSize() {
@@ -85,6 +89,14 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
+            try {
+                // 获取线程池
+                // Future用于执行多线程的执行结果
+                txLockManager.acquireLock(tid,pid,perm,System.currentTimeMillis(),0);
+            }catch (Exception e){
+                throw new TransactionAbortedException();
+            }
+        // permission 保证
         Page page = pageMap.get(pid);
         if(page != null)  {
             lruMap.merge(pid,1,Integer::sum);
@@ -94,6 +106,8 @@ public class BufferPool {
         if(pageMap.size() == numPages){
             evictPage();
         }
+        boolean isLocked = txLockManager.acquireLock(tid, pid, perm, System.currentTimeMillis(), 0);
+        if (!isLocked) throw new TransactionAbortedException();
         page = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
         pageMap.put(page.getId(), page);
         lruMap.merge(pid,1,Integer::sum);
@@ -110,8 +124,11 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void unsafeReleasePage(TransactionId tid, PageId pid) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        try {
+            txLockManager.releaseLock(tid, pid);
+        }catch (Exception e){
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -120,17 +137,14 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      */
     public void transactionComplete(TransactionId tid) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        transactionComplete(tid,true);
     }
 
     /**
      * Return true if the specified transaction has a lock on the specified page
      */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
-        return false;
+        return txLockManager.hasHoldsLock(tid,p);
     }
 
     /**
@@ -141,8 +155,38 @@ public class BufferPool {
      * @param commit a flag indicating whether we should commit or abort
      */
     public void transactionComplete(TransactionId tid, boolean commit) {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        String action = commit ? "提交 commit" : "终止 abort";
+        System.out.println("事务"+tid.getId() +action);
+        // 提交时，应该将与事务关联的脏页刷新到磁盘。
+        // 中止时，应该通过将页面恢复到其磁盘上状态来恢复事务所做的任何更改。
+        if(commit){
+            try {
+                flushPages(tid);
+            }catch (IOException e){
+                e.printStackTrace();
+            }
+        }else{
+            try {
+                recoverAllPages(tid);
+            }catch (IOException e){
+                e.printStackTrace();
+            }
+        }
+        try {
+            txLockManager.releaseLock(tid);
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void recoverAllPages(TransactionId tid) throws IOException{
+        for (PageId pid: pageMap.keySet()) {
+            Page page = pageMap.get(pid);
+            if(!tid.equals(page.isDirty()))continue;
+            Page recovery = Database.getCatalog().getDatabaseFile(page.getId().getTableId()).readPage(page.getId());
+            pageMap.put(recovery.getId(), recovery);
+            // lruMap不做改动;
+        }
     }
 
     /**
@@ -208,16 +252,14 @@ public class BufferPool {
             if(page.isDirty() != null){
                 DbFile databaseFile = Database.getCatalog().getDatabaseFile(id.getTableId());
                 databaseFile.writePage(page);
+                try {
+                    txLockManager.releaseLock(page.isDirty(), page.getId());
+                } catch (Exception e){
+                    e.printStackTrace();
+                }
                 page.markDirty(false,null);
             }
         }
-        // 不需要驱除
-//        for (PageId id : toFlush) {
-//            pageMap.remove(id);
-//        }
-//        for (PageId id: toFlush){
-//            lruMap.remove(id);
-//        }
     }
 
     /**
@@ -246,16 +288,17 @@ public class BufferPool {
             Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
             page.markDirty(false,null);
         }
-        else
-            System.out.println("FLUSH PAGE ERROR: NO PAGE " + pid + " IN BUFFER POOL");
     }
 
     /**
      * Write all pages of the specified transaction to disk.
      */
     public synchronized void flushPages(TransactionId tid) throws IOException {
-        // TODO: some code goes here
-        // not necessary for lab1|lab2
+        for (PageId pageId: pageMap.keySet()) {
+            Page page = pageMap.get(pageId);
+            if(!tid.equals(page.isDirty())) continue;
+            flushPage(pageId);
+        }
     }
 
     /**
@@ -266,19 +309,21 @@ public class BufferPool {
         PageId victim = null;
         int min = Integer.MAX_VALUE;
         // 找到最少访问的page
-        for (PageId id : lruMap.keySet()) {
+        for (PageId id: pageMap.keySet()) {
+            Page page = pageMap.get(id);
+            if(page.isDirty() != null) continue;
             if(victim == null){
                 victim = id;
                 min = lruMap.get(id);
-            }
-            else{
-                int temp = lruMap.get(id);
-                if(temp < min){
+            }else{
+                int times = lruMap.get(id);
+                if (times < min){
                     victim = id;
-                    min = temp;
+                    min = times;
                 }
             }
         }
+        if(victim == null) throw new DbException("NO CLEAN PAGE TO EVICT");
         try {
             flushPage(victim);
             // 记得要驱除

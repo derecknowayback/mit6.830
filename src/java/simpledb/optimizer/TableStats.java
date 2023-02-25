@@ -4,7 +4,9 @@ import javafx.util.Pair;
 import simpledb.common.Database;
 import simpledb.common.Type;
 import simpledb.execution.Predicate;
+import simpledb.index.BTreeFile;
 import simpledb.storage.*;
+import simpledb.transaction.TransactionId;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,6 +78,11 @@ public class TableStats {
     private List<Object> histograms;
     private int ioCostPerPage;
 
+    private int tableId;
+    private int ntup;
+    private TupleDesc tupleDesc;
+    private DbFile file;
+
     public TableStats(int tableid, int ioCostPerPage) {
         // For this function, you'll have to get the
         // DbFile for the table in question,
@@ -84,86 +91,151 @@ public class TableStats {
         // You should try to do this reasonably efficiently, but you don't
         // necessarily have to (for example) do everything
         // in a single scan of the table.
-        DbFile file = Database.getCatalog().getDatabaseFile(tableid);
-        TupleDesc tupleDesc = file.getTupleDesc();
-        int numFields = tupleDesc.numFields(); // 说明我们要关注多少个字段
-        histograms = new ArrayList<>(numFields);
-        // 对于int我们要关心最大最小值, 对于string我们不需要关心最大最小值;
-        // 要先扫描一遍
-        DbFileIterator iterator = file.iterator(null);
-        HashMap<Integer, Pair<Integer, Integer>> intStaticsMap = null;
-        try {
-            intStaticsMap = getIntStaticsMap(iterator, numFields);
-        }catch (Exception e){
-            System.out.println("TableStats: " + e);
-            return;
+        this.ioCostPerPage = ioCostPerPage;
+        this.tableId = tableid;
+        file = Database.getCatalog().getDatabaseFile(tableid);
+        tupleDesc = this.file.getTupleDesc();
+        int numFields = tupleDesc.numFields();
+        histograms = new ArrayList<>();
+        for(int i=0; i<numFields; i++)
+            histograms.add(null);
+        DbFileIterator it = file.iterator(new TransactionId());
+        HashMap<Integer,MyPair> histogramMap = null;
+        try{
+            this.ntup = 0;
+            histogramMap =  getMaxMin(it);
+        }catch(Exception e){
+            e.printStackTrace();
+            throw new Error();
         }
-        // 现在要先创建直方图，再添加
-        // 创建
         for (int i = 0; i < numFields; i++) {
             if(tupleDesc.getFieldType(i) == Type.INT_TYPE){
-                Pair<Integer, Integer> pair = intStaticsMap.get(i);
-                histograms.add(new IntHistogram(NUM_HIST_BINS,pair.getKey(),pair.getValue()));
+                MyPair myPair = histogramMap.get(i);
+                IntHistogram intHistogram = new IntHistogram(NUM_HIST_BINS, myPair.getKey(), myPair.getValue());
+                histograms.set(i,intHistogram);
             }else {
-                histograms.add(new StringHistogram(NUM_HIST_BINS));
+                histograms.set(i,new StringHistogram(NUM_HIST_BINS));
             }
         }
-        // 添加数据
-        iterator = file.iterator(null);
         try {
-            addStatics(iterator,numFields);
+            it.rewind();
         }catch (Exception e){
-            System.out.println("TableStats: " + e);
-            return;
+            e.printStackTrace();
         }
-        this.ioCostPerPage = ioCostPerPage;
+        addValue(it);
+        it.close();
     }
 
+    private static class MyPair{
+        Integer key,value;
 
-    private HashMap<Integer, Pair<Integer,Integer>> getIntStaticsMap( DbFileIterator iterator,int numFields) throws Exception{
-        iterator.open();
-        // 定义 Pair的第一个值是 min，第二个是 max
-        HashMap<Integer, Pair<Integer,Integer>> res = new HashMap<>();
-        while (iterator.hasNext()){
-            Tuple next = iterator.next();
-            for (int i = 0; i < numFields; i++) {
-                // 拿到第 i 个字段
-                Field field = next.getField(i);
-                // 忽略 StringField
-                if (field instanceof IntField){
-                    IntField f = (IntField) field;
-                    int tempVal = f.getValue();
-                    Pair<Integer, Integer> pair = res.get(i);
-                    if(pair == null){
-                        pair = new Pair<>(tempVal, tempVal);
-                    }else{
-                        int min = Math.min(pair.getKey(),tempVal), max = Math.max(pair.getValue(),tempVal);
-                        pair = new Pair<>(min,max);
+        public MyPair(Integer key, Integer value) {
+            this.key = key;
+            this.value = value;
+        }
+
+        public Integer getKey() {
+            return key;
+        }
+
+        public void setKey(Integer key) {
+            this.key = key;
+        }
+
+        public Integer getValue() {
+            return value;
+        }
+
+        public void setValue(Integer value) {
+            this.value = value;
+        }
+    }
+
+    private HashMap<Integer, MyPair> getMaxMin(DbFileIterator it) {
+        HashMap<Integer, MyPair> resMap = new HashMap<>();
+        try {
+            it.open();
+            while (it.hasNext()){
+                Tuple t = it.next();
+                for (int i = 0; i < tupleDesc.numFields(); i++) {
+                    if(tupleDesc.getFieldType(i) == Type.INT_TYPE){
+                        MyPair pair = resMap.get(i);
+                        int temp = ((IntField) t.getField(i)).getValue();
+                        if(pair != null){
+                            int min = pair.getKey(), max = pair.getValue();
+                            if(temp < min) pair.setKey(temp);
+                            if(temp > max) pair.setValue(temp);
+                        }else{
+                            resMap.put(i,new MyPair(temp,temp));
+                        }
                     }
-                    res.put(i,pair);
                 }
+                ntup ++;
             }
+        }catch (Exception e){
+            e.printStackTrace();
         }
-        iterator.close();
-        return res;
+        return resMap;
     }
 
+    private void addValue(DbFileIterator iterator){
+        try {
+            iterator.open();
+            while (iterator.hasNext()){
+                Tuple t = iterator.next();
+                for (int i = 0; i < tupleDesc.numFields(); i++) {
+                    if(tupleDesc.getFieldType(i) == Type.INT_TYPE){
+                        ((IntHistogram)histograms.get(i)).addValue(((IntField)t.getField(i)).getValue());
+                    }else{
+                        ((StringHistogram)histograms.get(i)).addValue(((StringField)t.getField(i)).getValue());
+                    }
+                }
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
 
-    private void addStatics(DbFileIterator iterator, int numFields) throws Exception{
-        while (iterator.hasNext()){
-            Tuple next = iterator.next();
-            for (int i = 0; i < numFields; i++) {
-                Field field = next.getField(i);
-                if (field instanceof IntField){
-                    IntHistogram intHistogram = (IntHistogram)histograms.get(i);
-                    intHistogram.addValue(((IntField)field).getValue());
+    private Object getHistogram(int field){
+        if(histograms.get(field) == null){
+            DbFileIterator it = file.iterator(new TransactionId());
+            try{
+                it.open();
+                Type type = file.getTupleDesc().getFieldType(field);
+                if(type == Type.STRING_TYPE){
+                    StringHistogram hist = new StringHistogram(NUM_HIST_BINS);
+                    while(it.hasNext())
+                        hist.addValue(((StringField)it.next().getField(field)).getValue());
+                    it.close();
+                    histograms.set(field, hist);
+                    return hist;
                 }else{
-                    StringHistogram stringHistogram = (StringHistogram) histograms.get(i);
-                    stringHistogram.addValue(((StringField)field).getValue());
+                    int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
+                    List<Integer> toAdd = new ArrayList<>();
+                    while(it.hasNext()){
+                        Tuple t = it.next();
+                        int x = ((IntField)t.getField(field)).getValue();
+                        if(x < min) min = x;
+                        if(x > max) max = x;
+                        toAdd.add(x);
+                    }
+                    it.close();
+                    IntHistogram hist = new IntHistogram(NUM_HIST_BINS, min, max);
+                    for (Integer integer : toAdd) hist.addValue(integer);
+                    histograms.set(field, hist);
+                    return hist;
                 }
+            }catch(Exception e){
+                e.printStackTrace();
+                throw new Error();
             }
-        }
+        }else
+            return histograms.get(field);
     }
+
+
+
+
 
     /**
      * Estimates the cost of sequentially scanning the file, given that the cost
@@ -178,8 +250,13 @@ public class TableStats {
      * @return The estimated cost of scanning the table.
      */
     public double estimateScanCost() {
-        // TODO: some code goes here
-        return 0;
+        DbFile databaseFile = Database.getCatalog().getDatabaseFile(tableId);
+        if(databaseFile instanceof  HeapFile){
+            return ioCostPerPage * ((HeapFile) databaseFile).numPages();
+        }else if (databaseFile instanceof BTreeFile){
+            return ioCostPerPage * ((BTreeFile) databaseFile).numPages();
+        }
+        return -1;
     }
 
     /**
@@ -191,8 +268,7 @@ public class TableStats {
      *         selectivityFactor
      */
     public int estimateTableCardinality(double selectivityFactor) {
-        // TODO: some code goes here
-        return 0;
+        return (int) Math.floor(ntup * selectivityFactor);
     }
 
     /**
@@ -205,8 +281,15 @@ public class TableStats {
      *              expected selectivity. You may estimate this value from the histograms.
      */
     public double avgSelectivity(int field, Predicate.Op op) {
-        // TODO: some code goes here
-        return 1.0;
+        Object o = histograms.get(field);
+        Type fieldType = Database.getCatalog().getTupleDesc(tableId).getFieldType(field);
+        if (fieldType == Type.INT_TYPE){
+            IntHistogram histogram = (IntHistogram) o;
+            return histogram.avgSelectivity(); // TODO: buggy
+        }else{
+            StringHistogram histogram = (StringHistogram) o;
+            return histogram.avgSelectivity(); // TODO: buggy
+        }
     }
 
     /**
@@ -220,16 +303,22 @@ public class TableStats {
      *         predicate
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
-        // TODO: some code goes here
-        return 1.0;
+        Object o = histograms.get(field);
+        Type fieldType = Database.getCatalog().getTupleDesc(tableId).getFieldType(field);
+        if (fieldType == Type.INT_TYPE){
+            IntHistogram histogram = (IntHistogram) o;
+            return histogram.estimateSelectivity(op,((IntField)constant).getValue());
+        }else{
+            StringHistogram histogram = (StringHistogram) o;
+            return histogram.estimateSelectivity(op,((StringField)constant).getValue());
+        }
     }
 
     /**
      * return the total number of tuples in this table
      */
     public int totalTuples() {
-        // TODO: some code goes here
-        return 0;
+        return ntup;
     }
 
 }

@@ -26,6 +26,10 @@ public class BTreeInternalPage extends BTreePage {
 
     private int childCategory; // either leaf or internal
 
+    public int[] getChildren() {
+        return children;
+    }
+
     public void checkRep(Field lowerBound, Field upperBound, boolean checkOccupancy, int depth) {
         Field prev = lowerBound;
         assert (this.getId().pgcateg() == BTreePageId.INTERNAL);
@@ -414,7 +418,9 @@ public class BTreeInternalPage extends BTreePage {
         if (!isSlotUsed(rid.getTupleNumber()))
             throw new DbException("tried to update null entry.");
 
+        // 要保证顺序
         for (int i = rid.getTupleNumber() + 1; i < numSlots; i++) {
+            // 找到后面的第一个field，看看是不是比自己小，如果小了，破坏顺序，不允许；
             if (isSlotUsed(i)) {
                 if (keys[i].compare(Op.LESS_THAN, e.getKey())) {
                     throw new DbException("attempt to update entry with invalid key " + e.getKey() +
@@ -425,6 +431,7 @@ public class BTreeInternalPage extends BTreePage {
         }
         for (int i = rid.getTupleNumber() - 1; i >= 0; i--) {
             if (isSlotUsed(i)) {
+                // 找到前面的第一个field，看看是不是比自己大，如果大了，破坏顺序，不允许
                 if (i > 0 && keys[i].compare(Op.GREATER_THAN, e.getKey())) {
                     throw new DbException("attempt to update entry with invalid key " + e.getKey() +
                             " HINT: updated key must be greater than or equal to keys on the left");
@@ -467,6 +474,7 @@ public class BTreeInternalPage extends BTreePage {
             keys[1] = e.getKey();
             markSlotUsed(0, true);
             markSlotUsed(1, true);
+            // 这里tupleNum设置为1，而不是0
             e.setRecordId(new RecordId(pid, 1));
             return;
         }

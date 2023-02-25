@@ -42,6 +42,11 @@ public class TransactionTestUtil {
         for(int i = 0; i < list.length; i++) {
             list[i] = new XactionTester(table.getId(), latch);
             list[i].start();
+            try {
+                Thread.sleep(100 * 2);
+            }catch (Exception e){
+                e.printStackTrace();
+            }
         }
 
         long stopTestTime = System.currentTimeMillis() + TIMEOUT_MILLIS;
@@ -79,6 +84,7 @@ public class TransactionTestUtil {
     }
 
     private static class XactionTester extends Thread {
+        public static int times = 0;
         private final int tableId;
         private final ModifiableCyclicBarrier latch;
         public Exception exception = null;
@@ -90,9 +96,15 @@ public class TransactionTestUtil {
         }
 
         public void run() {
+            times++;
+            System.out.println(times + "    " + Thread.currentThread().getId());
             try {
                 // Try to increment the value until we manage to successfully commit
+                int retryTime = 0;
                 while (true) {
+                    if(retryTime != 0)
+                        System.out.println("线程" + Thread.currentThread().getId() + "重试了: " + retryTime);
+                    retryTime ++;
                     // Wait for all threads to be ready
                     latch.await();
                     Transaction tr = new Transaction();
@@ -107,6 +119,7 @@ public class TransactionTestUtil {
                         Tuple tup = q1.next();
                         IntField intf = (IntField) tup.getField(0);
                         int i = intf.getValue();
+                        System.out.println("事务" + tr.getId().getId() + "：  read done" );
 
                         // create a Tuple so that Insert can insert this new value
                         // into the table.
@@ -127,7 +140,7 @@ public class TransactionTestUtil {
                         q2.start();
                         q2.next();
                         q2.close();
-
+                        System.out.println("事务" + tr.getId().getId() + "：  delete done" );
                         // set up a Set with a tuple that is one higher than the old one.
                         Set<Tuple> hs = new HashSet<>();
                         hs.add(t);
@@ -139,17 +152,19 @@ public class TransactionTestUtil {
                         q3.start();
                         q3.next();
                         q3.close();
-
+                        System.out.println("事务" + tr.getId().getId() + "：  insert done" );
                         tr.commit();
+                        System.out.println("事务" + tr.getId().getId() + "：  commit done" );
                         break;
                     } catch (TransactionAbortedException te) {
                         //System.out.println("thread " + tr.getId() + " killed");
                         // give someone else a chance: abort the transaction
+                        System.out.println("正确终止！！！");
                         tr.transactionComplete(true);
                         latch.stillParticipating();
                     }
                 }
-                //System.out.println("thread " + id + " done");
+                System.out.println("线程" + Thread.currentThread().getId() + " done");
             } catch (Exception e) {
                 // Store exception for the master thread to handle
                 exception = e;

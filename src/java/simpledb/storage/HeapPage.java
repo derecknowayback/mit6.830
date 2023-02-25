@@ -6,10 +6,7 @@ import simpledb.common.DbException;
 import simpledb.transaction.TransactionId;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 
 /**
  * Each instance of HeapPage stores data for one page of HeapFiles and
@@ -25,10 +22,8 @@ public class HeapPage implements Page {
     final byte[] header; // bitmap
     final Tuple[] tuples; // 真正存储tuple的地方
     final int numSlots; // 槽的容量
-    final List<Integer> tupleList; // 有效tuple的index集合
-    final List<Integer> unusedList; // 没有使用的Slot,作为缓存,高效获得unused slot
 
-    private boolean isDirty; // 这个字段其实没什么用, 真正有用的是 transactionId
+
     private TransactionId transactionId;
 
     byte[] oldData;
@@ -55,9 +50,6 @@ public class HeapPage implements Page {
         this.pid = id;
         this.td = Database.getCatalog().getTupleDesc(id.getTableId());
         this.numSlots = getNumTuples();
-        this.tupleList = new ArrayList<>();
-        this.unusedList = new ArrayList<>();
-        this.isDirty = false;
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
 
         // allocate and read the header slots of this page
@@ -257,8 +249,7 @@ public class HeapPage implements Page {
         if(t.getRecordId().getPageId() != pid || !isSlotUsed(index)) // 判断是否有这个tuple
             throw new DbException("Delete failed ...");
         markSlotUsed(index,false); // 标记为free
-        tupleList.remove((Integer)index); // 从tupleList中移除
-        unused.add(index); // 添加到unusedList
+        tuples[index] = null;
     }
 
     /**
@@ -273,10 +264,15 @@ public class HeapPage implements Page {
         // 检查是不是这个page的
         if(getNumUnusedSlots() == 0 || !td.equals(t.getTupleDesc()))
             throw new DbException("ERROR: HeapPage Insert failed ...");
-        int index = unusedList.remove(0); // pop出第一个元素
+        int index = -1;
+        for (int i = 0; i < tuples.length; i++) {
+            if( !isSlotUsed(i)){
+                index = i;
+                break;
+            }
+        }
         tuples[index] = t;
         markSlotUsed(index,true); // 标记为已使用
-        tupleList.add(index);
         t.setRecordId(new RecordId(pid,index)); // !!!不要忘记设置RecordId
     }
 
@@ -285,8 +281,6 @@ public class HeapPage implements Page {
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
-        this.isDirty = dirty;
-        // 不知道要不要判断, 防御性起见还是判断一下
         if(dirty)
             this.transactionId = tid;
         else
@@ -304,18 +298,10 @@ public class HeapPage implements Page {
      * Returns the number of unused (i.e., empty) slots on this page.
      */
     public int getNumUnusedSlots() {
-        int res = 0, index = -1;
-        for (int i = 0; i < getNumTuples(); i++) {
-            if(i % 8 == 0) index++;
-            if(getBit(header[index], i % 8) == 0){
-                res++;
-                tupleList.remove((Integer) i); // 这里特地强转一下，不然会被识别为 "按索引移除"
-                unusedList.add(i); // 这里加一个缓存
-            }
-            else if (!tupleList.contains(i)){
-                tupleList.add(i);
-                unusedList.remove((Integer) i); // 这里特地强转一下，不然会被识别为 "按索引移除"
-            }
+        int res = 0;
+        for (int i = 0; i < tuples.length; i++) {
+           if (!isSlotUsed(i))
+               res++;
         }
         return res;
     }
@@ -336,38 +322,17 @@ public class HeapPage implements Page {
         header[index] = setBit(header[index],i % 8,bit);
     }
 
-    // 自建类，用于迭代页面上的所有tuple
-    private class TupIterator implements Iterator{
-
-        Iterator <Integer> realIterator; // 这个iterator实际上是tupleList的iterator，我们包装一下；
-
-        public TupIterator(Iterator <Integer> realIterator){
-            this.realIterator = realIterator;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return realIterator.hasNext();
-        }
-
-        @Override
-        public Tuple next() {
-            return tuples[realIterator.next()];
-        }
-
-        @Override
-        public void remove() throws UnsupportedOperationException{
-            throw new UnsupportedOperationException();
-        }
-    }
-
     /**
      * @return an iterator over all tuples on this page (calling remove on this iterator throws an UnsupportedOperationException)
      *         (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        getNumUnusedSlots(); // 更新tupleList，确保正确性；
-        return new TupIterator(tupleList.iterator());
+        ArrayList<Tuple> list = new ArrayList<>();
+        for (int i = 0; i < tuples.length; i++) {
+            if(isSlotUsed(i))
+                list.add(tuples[i]);
+        }
+        return list.iterator();
     }
 
     /* Returns the Nth bit of X. */

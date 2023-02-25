@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Tuple maintains information about the contents of a tuple. Tuples have a
@@ -29,21 +30,11 @@ public class Tuple implements Serializable {
      *           instance with at least one field.
      */
     public Tuple(TupleDesc td) {
-        this.fields = new ArrayList<>();
-        if(td == null || td.numFields() < 1){
-            return;
-        }
         this.tupleDesc = td;
         int len = td.numFields();
-        // 创建字段集合
-        for (int i = 0; i < len; i++) {
-            Field newField;
-            if(td.getFieldType(i) == Type.INT_TYPE)
-                newField = new IntField(0);
-            else
-                newField = new StringField("",0);
-            fields.add(newField);
-        }
+        this.fields = new ArrayList<>(len);
+        for (int i = 0; i < len; i++)
+            fields.add(null);
     }
 
     /**
@@ -77,7 +68,7 @@ public class Tuple implements Serializable {
      * @param f new value for the field.
      */
     public void setField(int i, Field f) {
-        if(fields == null || i >= fields.size() || i < 0 ) return;
+        if(i >= fields.size() || i < 0 ) return;
         fields.set(i,f);
     }
 
@@ -86,7 +77,7 @@ public class Tuple implements Serializable {
      * @return the value of the ith field, or null if it has not been set.
      */
     public Field getField(int i) {
-        if(fields == null || i >= fields.size() || i < 0 ) return null;
+        if(i >= fields.size() || i < 0 ) return null;
         Field field = fields.get(i);
         return field;
     }
@@ -117,7 +108,6 @@ public class Tuple implements Serializable {
      * @return An iterator which iterates over all the fields of this tuple
      */
     public Iterator<Field> fields() {
-        if(fields == null) return null;
         return fields.iterator();
     }
 
@@ -125,9 +115,8 @@ public class Tuple implements Serializable {
      * reset the TupleDesc of this tuple (only affecting the TupleDesc)
      */
     public void resetTupleDesc(TupleDesc td) {
-        Tuple newTuple = new Tuple(td);
-        this.fields = newTuple.fields;
-        this.tupleDesc = newTuple.tupleDesc;
+        this.tupleDesc = td;
         // recordId 不变
     }
+
 }

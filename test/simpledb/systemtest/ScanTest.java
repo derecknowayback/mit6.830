@@ -10,6 +10,7 @@ import static org.junit.Assert.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -95,21 +96,30 @@ public class ScanTest extends SimpleDbTestBase {
         }
 
         // Create the table
+        long start = System.currentTimeMillis();
         final int PAGES = 30;
         List<List<Integer>> tuples = new ArrayList<>();
         File f = SystemTestUtil.createRandomHeapFileUnopened(1, 992*PAGES, 1000, null, tuples);
         TupleDesc td = Utility.getTupleDesc(1);
         InstrumentedHeapFile table = new InstrumentedHeapFile(f, td);
         Database.getCatalog().addTable(table, SystemTestUtil.getUUID());
+        long create= System.currentTimeMillis();
+        System.out.println("创建花了：" + (create - start));
 
         // Scan the table once
+        long startScan = System.currentTimeMillis();
         SystemTestUtil.matchTuples(table, tuples);
         assertEquals(PAGES, table.readCount);
         table.readCount = 0;
+        long match1= System.currentTimeMillis();
+        System.out.println("第一次比较花了：" + (match1 - startScan));
 
         // Scan the table again: all pages should be cached
+        startScan = System.currentTimeMillis();
         SystemTestUtil.matchTuples(table, tuples);
         assertEquals(0, table.readCount);
+        long match2 = System.currentTimeMillis();
+        System.out.println("第二次比较花了：" + (match2 - startScan));
     }
 
     /** Verifies SeqScan's getTupleDesc prefixes the table name + "." to the field names
