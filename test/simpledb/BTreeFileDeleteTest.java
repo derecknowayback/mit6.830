@@ -219,12 +219,16 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 		dirtypages.put(pageId, page);
 		dirtypages.put(siblingId, sibling);
 		dirtypages.put(parentId, parent);
+//		System.out.println("一半应该是：" + totalEntries/2 + "  或  " + (totalEntries/2 + 1));
 		empty.stealFromLeftInternalPage(tid, dirtypages, page, sibling, parent, entry);
 		
 		// are all the entries still there?
 		assertEquals(totalEntries, page.getNumEntries() + sibling.getNumEntries());
 		
 		// have the entries been evenly distributed?
+
+//		System.out.println("page 的entry: " + page.getNumEntries());
+//		System.out.println("sibling 的entry：" + sibling.getNumEntries());
 		assertTrue(page.getNumEntries() == totalEntries/2 || page.getNumEntries() == totalEntries/2 + 1);
 		assertTrue(sibling.getNumEntries() == totalEntries/2 || sibling.getNumEntries() == totalEntries/2 + 1);
 		

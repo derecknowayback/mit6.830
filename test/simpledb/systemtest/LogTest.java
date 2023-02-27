@@ -14,6 +14,7 @@ import simpledb.execution.SeqScan;
 import simpledb.storage.*;
 import simpledb.transaction.Transaction;
 import simpledb.transaction.TransactionAbortedException;
+import simpledb.transaction.TransactionId;
 
 import static org.junit.Assert.*;
 
@@ -237,6 +238,8 @@ public class LogTest extends SimpleDbTestBase {
         insertRow(hf2, t2, 22);
         t2.commit();
 
+        Database.getLogFile().print();
+
         insertRow(hf1, t1, 4);
         abort(t1);
 
@@ -283,7 +286,7 @@ public class LogTest extends SimpleDbTestBase {
     @Test public void TestCommitAbortCommitCrash()
             throws IOException, DbException, TransactionAbortedException {
         setup();
-        doInsert(hf1, 1, 2);
+        doInsert(hf1, 1, 2); // 事务0 插了2行 1/2
 
         // *** Test:
         // T1 inserts and commits
@@ -291,9 +294,10 @@ public class LogTest extends SimpleDbTestBase {
         // T3 inserts and commit
         // only T1 and T3 data should be there
 
-        doInsert(hf1, 5, -1);
-        dontInsert(hf1, 6);
-        doInsert(hf1, 7, -1);
+        doInsert(hf1, 5, -1); // 事务1 插了 1行 5
+        dontInsert(hf1, 6); // 事务2 插了 6 但是abort
+        doInsert(hf1, 7, -1); // 事务3 插了 1行 7
+
 
         Transaction t = new Transaction();
         t.start();
@@ -305,7 +309,7 @@ public class LogTest extends SimpleDbTestBase {
 
         // *** Test:
         // crash: should not change visible data
-
+//        Database.getLogFile().print();
         crash();
 
         t = new Transaction();

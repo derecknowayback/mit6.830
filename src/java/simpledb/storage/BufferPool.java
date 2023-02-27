@@ -161,7 +161,18 @@ public class BufferPool {
         // 中止时，应该通过将页面恢复到其磁盘上状态来恢复事务所做的任何更改。
         if(commit){
             try {
-                flushPages(tid);
+                for (PageId pid : pageMap.keySet()) {
+                    Page page = pageMap.get(pid);
+                    HeapPage heapPage = (HeapPage)page;
+//                    Iterator<Tuple> iterator = heapPage.iterator();
+//                    int count = 0;
+//                    while (iterator.hasNext()){
+//                        iterator.next();
+//                        count ++;
+//                    }
+                    flushPage(pid);
+                    page.setBeforeImage();
+                }
             }catch (IOException e){
                 e.printStackTrace();
             }
@@ -250,8 +261,7 @@ public class BufferPool {
             Page page = pageMap.get(id);
             // 如果是脏页，写会磁盘
             if(page.isDirty() != null){
-                DbFile databaseFile = Database.getCatalog().getDatabaseFile(id.getTableId());
-                databaseFile.writePage(page);
+                flushPage(page.getId());
                 try {
                     txLockManager.releaseLock(page.isDirty(), page.getId());
                 } catch (Exception e){
@@ -285,6 +295,13 @@ public class BufferPool {
         // 这个应该不需要管buffer-pool有没有吧,但是保险起见我还是判断了 page != null
         Page page = pageMap.get(pid);
         if(page != null){
+            // append an update record to the log, with
+            // a before-image and after-image.
+            TransactionId dirtier = page.isDirty();
+            if (dirtier != null){
+                Database.getLogFile().logWrite(dirtier, page.getBeforeImage(), page);
+                Database.getLogFile().force();
+            }
             Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
             page.markDirty(false,null);
         }

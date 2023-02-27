@@ -137,9 +137,11 @@ findLeafPage()实现访问的每个内部(非叶子)页都应该使用READ_ONLY�
 
 
 
+为什么stealFromLeafPage参数没有事务id，但是Internal就有；
 
 
 
+除了题目告诉我们的，我们需不需要设置其他页为dirty?
 
 
 

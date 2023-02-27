@@ -2,6 +2,7 @@ package simpledb.storage;
 
 import simpledb.common.Database;
 import simpledb.common.Debug;
+import simpledb.execution.SeqScan;
 import simpledb.transaction.TransactionId;
 
 import java.io.EOFException;
@@ -48,31 +49,42 @@ must not be declared synchronized and must begin with a block like:
  *
  * <li> The first long integer of the file represents the offset of the
  * last written checkpoint, or -1 if there are no checkpoints
+ * 文件的第一个长整数表示最后一个写入的检查点的偏移量，如果没有检查点，则为 -1
  *
  * <li> All additional data in the log consists of log records.  Log
  * records are variable length.
+ * 日志中的所有附加数据都由日志记录组成。日志记录的长度可变。
  *
  * <li> Each log record begins with an integer type and a long integer
  * transaction id.
+ * 每个日志记录都以整数类型和长整数事务 ID 开头。
  *
  * <li> Each log record ends with a long integer file offset representing
  * the position in the log file where the record began.
+ * 每个日志记录都以一个长整数文件偏移量结尾，表示日志文件中记录开始的位置。
  *
  * <li> There are five record types: ABORT, COMMIT, UPDATE, BEGIN, and
  * CHECKPOINT
+ *  有五种记录类型：ABORT, COMMIT, UPDATE, BEGIN, and CHECKPOINT
  *
  * <li> ABORT, COMMIT, and BEGIN records contain no additional data
+ * ABORT、COMMIT和 BEGIN 记录不包含其他数据
  *
  * <li>UPDATE RECORDS consist of two entries, a before image and an
  * after image.  These images are serialized Page objects, and can be
  * accessed with the LogFile.readPageData() and LogFile.writePageData()
  * methods.  See LogFile.print() for an example.
+ * UPDATE记录由两个条目组成，一个是前映像，一个是后映像。
+ * 这些图像是序列化的 Page 对象，可以使用 LogFile.readPageData（） 和 LogFile.writePageData（） 方法
+ * 进行访问。有关示例，请参阅 LogFile.print（）。
  *
  * <li> CHECKPOINT records consist of active transactions at the time
  * the checkpoint was taken and their first log record on disk.  The format
  * of the record is an integer count of the number of transactions, as well
  * as a long integer transaction id and a long integer first record offset
  * for each active transaction.
+ * CHECKPOINT 记录由创建检查点时的活动事务及其在磁盘上的第一个日志记录组成。
+ * 记录的格式是事务数的整数计数，以及每个活动事务的长整数事务 ID 和长整数首条记录偏移量。
  *
  * </ul>
  */
@@ -132,7 +144,9 @@ public class LogFile {
     void preAppend() throws IOException {
         totalRecords++;
         if (recoveryUndecided) {
+            // FIXME 现在可以决定要不要恢复了: 不需要恢复 ???
             recoveryUndecided = false;
+            // 截断
             raf.seek(0);
             raf.setLength(0);
             raf.writeLong(NO_CHECKPOINT_ID);
@@ -158,18 +172,18 @@ public class LogFile {
         synchronized (Database.getBufferPool()) {
 
             synchronized (this) {
-                preAppend();
+                preAppend(); // 记录数+1
                 //Debug.log("ABORT");
                 //should we verify that this is a live transaction?
 
                 // must do this here, since rollback only works for
                 // live transactions (needs tidToFirstLogRecord)
-                rollback(tid);
+                rollback(tid); // 回滚
 
                 raf.writeInt(ABORT_RECORD);
                 raf.writeLong(tid.getId());
                 raf.writeLong(currentOffset);
-                currentOffset = raf.getFilePointer();
+                currentOffset = raf.getFilePointer(); // 更新currentOffset
                 force();
                 tidToFirstLogRecord.remove(tid.getId());
             }
@@ -368,10 +382,11 @@ public class LogFile {
     public synchronized void logTruncate() throws IOException {
         preAppend();
         raf.seek(0);
-        long cpLoc = raf.readLong();
+        long cpLoc = raf.readLong();  // 读取最后一个检查点
 
         long minLogRecord = cpLoc;
 
+        // 如果有检查点的话
         if (cpLoc != -1L) {
             raf.seek(cpLoc);
             int cpType = raf.readInt();
@@ -459,6 +474,73 @@ public class LogFile {
         //print();
     }
 
+    public void rollback(long tid) throws NoSuchElementException, IOException{
+        synchronized (Database.getBufferPool()) {
+            synchronized (this) {
+                preAppend();
+                // 先找到 BEGIN 和 ABORT
+                Long startOffset = tidToFirstLogRecord.get(tid);
+                if(startOffset == null) throw new NoSuchElementException("事务"+tid+"不需要回滚...");
+                raf.seek(startOffset); // TODO: 2023/2/27 记得等下要把指针调回去
+                int type = raf.readInt();
+                if(type != BEGIN_RECORD) throw new IOException("begin指针没有指向begin日志");
+                // 两次读取就直接跳过tid和offset了，这里没有检查tid是否匹配
+                raf.readLong();
+                raf.readLong();
+
+                //现在开始遍历，目标是找到每一个page的第一版
+                HashSet<PageId> pageIds = new HashSet<>();
+                long xactionId;
+                while (true){
+                    try {
+                        type = raf.readInt();
+                        xactionId = raf.readLong(); // 事务id
+                    }catch (EOFException e){
+                        break;
+                    }
+                    if (type == UPDATE_RECORD) {
+                        Page before = readPageData(raf), after = readPageData(raf);
+                        raf.readLong(); // 处理记录后面一个offset
+                        if(xactionId != tid) continue;
+                        PageId pid = before.getId();
+                        int tableId = before.getId().getTableId();
+                        if(!pageIds.contains(pid)) {
+                            pageIds.add(pid);
+                            // FIXME: 2023/2/27 这里是用writePage还是只更换buffer-pool里的page? 毕竟变化还没有落盘
+                            Database.getCatalog().getDatabaseFile(tableId).writePage(before);
+                            // You will need to make sure that you discard any page from the buffer pool
+                            // whose before-image you write back to the table file.
+                            Database.getBufferPool().removePage(pid);
+                        }
+                    } else if (type == CHECKPOINT_RECORD) {
+                        try {
+                            // raf.writeInt(keys.size());
+                            int size = raf.readInt();
+                            //while (els.hasNext()) {
+//                            Long key = els.next();
+//                            raf.writeLong(key);
+//                            raf.writeLong(tidToFirstLogRecord.get(key));
+//                        }
+                            while (size != 0){
+                                raf.readLong();
+                                raf.readLong();
+                                size--;
+                            }
+//                        raf.writeLong(currentOffset);
+                            raf.readLong();
+                        }catch (EOFException e){
+                            break;
+                        }
+                    }else{
+                        raf.readLong();
+                    }
+                }
+                // 重新拨回指针
+                raf.seek(currentOffset);
+            }
+        }
+    }
+
     /**
      * Rollback the specified transaction, setting the state of any
      * of pages it updated to their pre-updated state.  To preserve
@@ -470,12 +552,7 @@ public class LogFile {
      */
     public void rollback(TransactionId tid)
             throws NoSuchElementException, IOException {
-        synchronized (Database.getBufferPool()) {
-            synchronized (this) {
-                preAppend();
-                // TODO: some code goes here
-            }
-        }
+       rollback(tid.getId());
     }
 
     /**
@@ -501,8 +578,77 @@ public class LogFile {
     public void recover() throws IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
+                currentOffset = 0;
                 recoveryUndecided = false;
-                // TODO: some code goes here
+                raf.seek(0); // TODO: 2023/2/27 别忘记调回指针
+                long checkPointStart = raf.readLong();
+                // 都是找失败的事务, 构建map
+                if(checkPointStart == -1){
+                    while (true){
+                        try {
+                            int type = raf.readInt();
+                            long tid = raf.readLong();
+                            react(type,tid,raf,true,false);
+                        }catch (EOFException e){
+                            break;
+                        }
+                    }
+                }else{
+                    raf.seek(checkPointStart);
+                    int type = raf.readInt();
+                    if(type != CHECKPOINT_RECORD) throw new IOException("CHECK指针不指向Check-Point");
+                    raf.readLong();
+                    int size = raf.readInt();
+                    while (size > 0){
+                        long tid = raf.readLong(),offset = raf.readLong();
+                        tidToFirstLogRecord.put(tid,offset);
+                        size--;
+                    }
+                }
+                // undo
+                for (long tid : tidToFirstLogRecord.keySet()) {
+                    rollback(tid);
+                }
+                // redo from start
+                raf.seek(0);
+                raf.readLong();
+                while (true){
+                    int type;
+                    try {
+                        type = raf.readInt();
+                        long tid = raf.readLong();
+                        boolean isLoser = tidToFirstLogRecord.containsKey(tid);
+                        react(type,tid,raf,false,!isLoser);
+                    }catch (EOFException e){
+                        break;
+                    }
+                }
+//                tidToFirstLogRecord.clear();
+            }
+        }
+    }
+
+    public void react(int type,long tid,RandomAccessFile raf,boolean toBuildMap,boolean redo) throws IOException {
+        switch (type){
+            case ABORT_RECORD:raf.readLong();break;
+            case COMMIT_RECORD:{
+                if(toBuildMap) tidToFirstLogRecord.remove(tid);
+                raf.readLong();
+                break;
+            }
+            case UPDATE_RECORD:{
+                // 无脑redo
+                Page before = readPageData(raf), after = readPageData(raf);
+                if(redo)
+                    Database.getCatalog().getDatabaseFile(after.getId().getTableId()).writePage(after);
+                raf.readLong();
+                //DEBUG_END
+                break;
+            }
+            case BEGIN_RECORD:{
+                long start = raf.readLong(); // 处理记录后面的offset
+                if(toBuildMap)tidToFirstLogRecord.put(tid, start);
+                break;
             }
         }
     }
@@ -522,6 +668,7 @@ public class LogFile {
                 int cpType = raf.readInt();
                 long cpTid = raf.readLong();
 
+                System.out.println("\n");
                 System.out.println((raf.getFilePointer() - (INT_SIZE + LONG_SIZE)) + ": RECORD TYPE " + cpType);
                 System.out.println((raf.getFilePointer() - LONG_SIZE) + ": TID " + cpTid);
 
@@ -571,6 +718,8 @@ public class LogFile {
                         System.out.println((middle + INT_SIZE) + " TO " + (raf.getFilePointer()) + ": page data");
 
                         System.out.println(raf.getFilePointer() + ": RECORD START OFFSET: " + raf.readLong());
+
+
 
                         break;
                 }
